@@ -91,7 +91,7 @@ class TransportEnv(gym.Env):
         res = []
         for transporter in self.transporters:
             try:
-                cost = transporter.compute_cost(node, quantity)
+                cost = transporter.compute_marginal_cost(node, quantity)
             except Exception:
                 cost = self.margins[-1]
             res.append(cost)

@@ -1,134 +1,199 @@
-from transporter_env import TransportEnv, MAT, OneDynamicTransporter
-import matplotlib.pyplot as plt
+"""Capacited Vehicles Routing Problem (CVRP)."""
 
-import torch
-from transporter_env import TransportEnv, MAT, OneDynamicTransporter
+from ortools.constraint_solver import routing_enums_pb2
+from ortools.constraint_solver import pywrapcp
 
-
+import networkx as nx
 import numpy as np
-import matplotlib.pyplot as plt
-from copy import deepcopy
-from rlberry.agents import Agent
-from rlberry.manager import AgentManager, plot_writer_data
-
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-from torch.distributions import Categorical
-
-# torch device
-device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-print(torch.backends.mps.is_built())
-print(device)
-
-# env = MAT(max_capacity=10)#size=12, transporters_hubs=(27, 116), horizon=128)
-env = OneDynamicTransporter()
 
 
-# rewards = []
-# env.reset()
-# env.render()
-# done = False
-# while not done:
-#     action = 0
-#     _, r, d, *_ = env.step(action)
-#     done = d
-#     rewards.append(r)
-# env.render()
-# t1_r = [r for r in rewards]
-# # t2_r = [r[1] for r in rewards]
-# print('transporter 1 total profit', sum(t1_r))
-# # print('transporter 2 total profit', sum(t2_r))
-
-from rlberry.agents import Agent
-
-class MyAgent(Agent):
-  name = "MyAgent"
-  def __init__(self, env, param1, param2, **kwargs):
-    """
-    The base class (Agent) initializes:
-      self.env : instance of the environment used for training (in fit() method)
-      self.eval_env : instance of the environment used for evaluation (in eval() method)
-      self.rng : random number generator (https://numpy.org/doc/stable/reference/random/generator.html)
-      self.writer : use self.writer.add_scalar(tag, value, global_step) to log training data
+def create_data_model():
+    """Stores the data for the problem."""
+    data = {}
+    # data['distance_matrix'] = [
+    #     [
+    #         0, 548, 776, 696, 582, 274, 502, 194, 308, 194, 536, 502, 388, 354,
+    #         468, 776, 662
+    #     ],
+    #     [
+    #         548, 0, 684, 308, 194, 502, 730, 354, 696, 742, 1084, 594, 480, 674,
+    #         1016, 868, 1210
+    #     ],
+    #     [
+    #         776, 684, 0, 992, 878, 502, 274, 810, 468, 742, 400, 1278, 1164,
+    #         1130, 788, 1552, 754
+    #     ],
+    #     [
+    #         696, 308, 992, 0, 114, 650, 878, 502, 844, 890, 1232, 514, 628, 822,
+    #         1164, 560, 1358
+    #     ],
+    #     [
+    #         582, 194, 878, 114, 0, 536, 764, 388, 730, 776, 1118, 400, 514, 708,
+    #         1050, 674, 1244
+    #     ],
+    #     [
+    #         274, 502, 502, 650, 536, 0, 228, 308, 194, 240, 582, 776, 662, 628,
+    #         514, 1050, 708
+    #     ],
+    #     [
+    #         502, 730, 274, 878, 764, 228, 0, 536, 194, 468, 354, 1004, 890, 856,
+    #         514, 1278, 480
+    #     ],
+    #     [
+    #         194, 354, 810, 502, 388, 308, 536, 0, 342, 388, 730, 468, 354, 320,
+    #         662, 742, 856
+    #     ],
+    #     [
+    #         308, 696, 468, 844, 730, 194, 194, 342, 0, 274, 388, 810, 696, 662,
+    #         320, 1084, 514
+    #     ],
+    #     [
+    #         194, 742, 742, 890, 776, 240, 468, 388, 274, 0, 342, 536, 422, 388,
+    #         274, 810, 468
+    #     ],
+    #     [
+    #         536, 1084, 400, 1232, 1118, 582, 354, 730, 388, 342, 0, 878, 764,
+    #         730, 388, 1152, 354
+    #     ],
+    #     [
+    #         502, 594, 1278, 514, 400, 776, 1004, 468, 810, 536, 878, 0, 114,
+    #         308, 650, 274, 844
+    #     ],
+    #     [
+    #         388, 480, 1164, 628, 514, 662, 890, 354, 696, 422, 764, 114, 0, 194,
+    #         536, 388, 730
+    #     ],
+    #     [
+    #         354, 674, 1130, 822, 708, 628, 856, 320, 662, 388, 730, 308, 194, 0,
+    #         342, 422, 536
+    #     ],
+    #     [
+    #         468, 1016, 788, 1164, 1050, 514, 514, 662, 320, 274, 388, 650, 536,
+    #         342, 0, 764, 194
+    #     ],
+    #     [
+    #         776, 868, 1552, 560, 674, 1050, 1278, 742, 1084, 810, 1152, 274,
+    #         388, 422, 764, 0, 798
+    #     ],
+    #     [
+    #         662, 1210, 754, 1358, 1244, 708, 480, 856, 514, 468, 354, 844, 730,
+    #         536, 194, 798, 0
+    #     ],
+    # ]
     
-    For reproducibility, use ONLY self.rng if you need random numbers in you agent!
-    To be able to visualize plots with AgentManager, log data using self.writer (see below)
-    """
-    Agent.__init__(self, env, **kwargs)
-    self.param1 = param1
-    self.param2 = param2
-    self.total_steps = 0
-    self.total_episodes = 0
+    G = nx.grid_2d_graph(10, 10)
+    distances = {
+        e : {
+            'distance' : np.random.binomial(20, 0.1)+1
+        }
+        for e in G.edges
+    }
+    nx.set_edge_attributes(G, distances)
+    distance_matrix = np.array(nx.floyd_warshall_numpy(G, weight = 'distance'), dtype=int)
+    # nx.floyd_warshall_numpy(G)
+    quantities = np.ones(17, dtype=int)
+    quantities[0] = 0
+    nodes = np.random.choice([i for i,_ in enumerate(G.nodes) if i!=85], size=16, replace=False)
+    
+    l = [85] + list(nodes)
+    data['distance_matrix'] = list(distance_matrix[np.ix_(l, l)])
+    
+    data['demands'] = quantities
+    #[0, 1, 1, 2, 4, 2, 2, 8, 8, 1, 2, 1, 2, 4, 4, 8, 8]
+    data['vehicle_capacities'] = [5]
+    data['num_vehicles'] = 1
+    data['depot'] = 0
+    return data
 
-  def select_action(self, state, evaluation=False):
-    """
-    If evaluation=True, run evaluation policy (e.g., greedy with respect to Q)
-    If evaluation=False, run exploration policy (e.g., epsilon greedy)
-    """
-    return self.env.action_space.sample()  # random action for this example
 
-  def fit(self, budget):
-    """budget = number of timesteps to train your agent"""
-    state, _ = self.env.reset()
-    episode_reward = 0.0
-    for tt in range(budget):
-      self.total_steps += 1
-      action = self.select_action(state, evaluation=False)
-      next_state, reward, done, *_ = self.env.step(action)
-      episode_reward += reward
-      print(reward)
+def print_solution(data, manager, routing, solution):
+    """Prints solution on console."""
+    print(f'Objective: {solution.ObjectiveValue()}')
+    total_distance = 0
+    total_load = 0
+    for vehicle_id in range(data['num_vehicles']):
+        index = routing.Start(vehicle_id)
+        plan_output = 'Route for vehicle {}:\n'.format(vehicle_id)
+        route_distance = 0
+        route_load = 0
+        while not routing.IsEnd(index):
+            node_index = manager.IndexToNode(index)
+            route_load += data['demands'][node_index]
+            plan_output += ' {0} Load({1}) -> '.format(node_index, route_load)
+            previous_index = index
+            index = solution.Value(routing.NextVar(index))
+            route_distance += routing.GetArcCostForVehicle(
+                previous_index, index, vehicle_id)
+        plan_output += ' {0} Load({1})\n'.format(manager.IndexToNode(index),
+                                                 route_load)
+        plan_output += 'Distance of the route: {}m\n'.format(route_distance)
+        plan_output += 'Load of the route: {}\n'.format(route_load)
+        print(plan_output)
+        total_distance += route_distance
+        total_load += route_load
+    print('Total distance of all routes: {}m'.format(total_distance))
+    print('Total load of all routes: {}'.format(total_load))
 
-      # Log data
-      self.writer.add_scalar('rewards', reward, global_step=self.total_steps)
 
-      state = next_state 
-      if done:
-        self.total_episodes += 1
-        # Log episode data
-        self.writer.add_scalar('episode_rewards', episode_reward, global_step=self.total_steps)
-        self.writer.add_scalar('episode', self.total_episodes, global_step=self.total_steps)
+def main():
+    """Solve the CVRP problem."""
+    # Instantiate the data problem.
+    data = create_data_model()
 
-        state, _ = self.env.reset()
-        episode_reward = 0.0
-        
-  
-  def eval(self, **kwargs):
-    """
-    Here, you can run Monte-Carlo policy evaluation 
-    with self.eval_env and return the result.
-    Returning zero for this example.
-    """
-    return 0.0
+    # Create the routing index manager.
+    manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']),
+                                           data['num_vehicles'], data['depot'])
 
-#
-# Initialize and train a single instance of MyAgent
-#
-my_agent = MyAgent(
-    env=(OneDynamicTransporter, {}),       # tuple (constructor, kwargs)
-    param1=10,               # extra params your agent might need
-    param2=15)
-# train the agent for 100 timesteps
-my_agent.fit(100)
-# pandas DataFrame containing data stored with my_agent.writer.add_scalar(tag, value, global_step)
-print(my_agent.writer.data)
+    # Create Routing Model.
+    routing = pywrapcp.RoutingModel(manager)
 
-#
-# Run several instances of MyAgent in parallel and plot the results
-#
-manager_kwargs = dict(
-    agent_class=MyAgent,
-    train_env=(OneDynamicTransporter, dict()),
-    eval_env=(OneDynamicTransporter, dict()),
-    fit_budget=100,                    # Number of total timesteps
-    n_fit=2,                           # Number of agent instances to fit
-    parallelization='thread',          # Use 'thread' in the notebook!
-    seed=456,                          # Seed
-    default_writer_kwargs=dict(maxlen=None,log_interval=10),
-)
-my_agent_manager = AgentManager(
-    init_kwargs=dict(param1=10, param2=20),
-    agent_name='MyAgent',
-    **manager_kwargs
-)
-my_agent_manager.fit()   # Train 'n_fit' instances in parallel
+
+    # Create and register a transit callback.
+    def distance_callback(from_index, to_index):
+        """Returns the distance between the two nodes."""
+        # Convert from routing variable Index to distance matrix NodeIndex.
+        from_node = manager.IndexToNode(from_index)
+        to_node = manager.IndexToNode(to_index)
+        return data['distance_matrix'][from_node][to_node]
+
+    transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+
+    # Define cost of each arc.
+    routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+    
+
+
+    # Add Capacity constraint.
+    def demand_callback(from_index):
+        """Returns the demand of the node."""
+        # Convert from routing variable Index to demands NodeIndex.
+        from_node = manager.IndexToNode(from_index)
+        return data['demands'][from_node]
+
+    demand_callback_index = routing.RegisterUnaryTransitCallback(
+        demand_callback)
+    routing.AddDimensionWithVehicleCapacity(
+        demand_callback_index,
+        0,  # null capacity slack
+        data['vehicle_capacities'],  # vehicle maximum capacities
+        True,  # start cumul to zero
+        'Capacity')
+
+    # Setting first solution heuristic.
+    search_parameters = pywrapcp.DefaultRoutingSearchParameters()
+    search_parameters.first_solution_strategy = (
+        routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION)
+    search_parameters.local_search_metaheuristic = (
+        routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH)
+    search_parameters.time_limit.FromSeconds(1)
+
+    # Solve the problem.
+    solution = routing.SolveWithParameters(search_parameters)
+
+    # Print solution on console.
+    if solution:
+        print_solution(data, manager, routing, solution)
+
+
+if __name__ == '__main__':
+    main()
