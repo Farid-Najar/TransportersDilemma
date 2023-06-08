@@ -28,7 +28,7 @@ class AssignmentGame:
                  max_capacity = 20,
                  horizon = 1_000,
                  is_VRP = True,
-                 emissions_KM = [0, .1, .2, .2],
+                 emissions_KM = [0, .15, .3, .3],
                  costs_KM = [2, 3, 4, 4],
                  CO2_penalty = 1_000,
                  Q = 25,
@@ -63,7 +63,7 @@ class AssignmentGame:
         self.num_vehicles = num_vehicles
         
         self.max_capacity = max_capacity
-        self.omission_cost = self.grid_size * 8
+        self.omission_cost = 2*np.max(self.distance_matrix) +1
         
         self.horizon = horizon
         
@@ -75,7 +75,7 @@ class AssignmentGame:
                 self.transporter = [
                     Transporter(
                         self.distance_matrix,
-                        cost_per_unit = self.costs_KM, 
+                        cost_per_unit = self.costs_KM + CO2_penalty*self.emissions_KM, 
                         transporter_hub=hub,
                         omission_cost=self.omission_cost,
                         max_capacity=max_capacity,
@@ -85,7 +85,7 @@ class AssignmentGame:
                 self.transporter = [
                     Transporter(
                         self.distance_matrix, 
-                        cost_per_unit = self.costs_KM, 
+                        cost_per_unit = self.costs_KM + CO2_penalty*self.emissions_KM, 
                         transporter_hub=hub,
                         omission_cost=self.omission_cost,
                         max_capacity=max_capacity,
@@ -152,8 +152,9 @@ class AssignmentGame:
             total_costs +=     np.sum(self._get_costs(distance, time))
             total_emissions += np.sum(self._get_emissions(distance, time))
             
-        self.info['solution_found'] = time != 0
+        self.info['solution_found'] = np.any(time != 0)
         self.info['costs'] = total_costs
+        self.info['time_per_vehicle'] = time
         self.info['excess_emission'] = total_emissions - self.Q
         self.info['omitted'] = omitted
         self.info['solution'] = solution
@@ -200,7 +201,10 @@ class AssignmentGame:
         destinations = np.random.choice([i for i,_ in enumerate(self.G.nodes) if i!=85], size=num_packages, replace=False)
         
         self.packages = [
-            Package(destination=d)
+            Package(
+                destination=d,
+                quantity=1,#TODO
+            )
             for d in destinations
         ]
         
@@ -217,6 +221,8 @@ class AssignmentGame:
         
         self.t = 0
         self.info = dict()
+        
+        self.num_packages = num_packages
         
         return self.info
     
@@ -240,7 +246,7 @@ class AssignmentGame:
         return -costs
     
         
-    def step(self, actions : Dict):
+    def step(self, actions):
         self.t += 1
         
         done = self.t >= self.horizon
@@ -250,16 +256,16 @@ class AssignmentGame:
 
 
 if __name__ == '__main__':
-    env = AssignmentGame()
+    game = AssignmentGame()
     K = 50
     rewards = []
-    env.reset(num_packages = K)
+    game.reset(num_packages = K)
     
     done = False
     while not done:
         actions = np.ones(K, dtype=int)
-        actions[2] = 0
-        r, d, info = env.step(actions)
+        # actions[2] = 0
+        r, d, info = game.step(actions)
         done = True
         rewards.append(r)
         print(info)

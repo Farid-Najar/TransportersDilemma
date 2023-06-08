@@ -65,7 +65,9 @@ def solve(data):
     # routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
     for m in range(data['num_vehicles']):
         transit_callback_index = routing.RegisterTransitCallback(
-            lambda from_idx, to_idx : distance_callback(from_idx, to_idx, data['cost_per_unit'][m])
+            lambda from_idx, to_idx : distance_callback(
+                from_idx, to_idx, 
+                data['cost_per_unit'][m])
         )
         routing.SetArcCostEvaluatorOfVehicle(transit_callback_index, m)
     
@@ -108,6 +110,7 @@ class Transporter:
     def __init__(self, 
                  distance_matrix,
                  cost_per_unit = None,
+                #  emission_per_unit = None,
                  time_matrix = None,
                  omission_cost = 100, 
                  transporter_hub : int = 85, 
@@ -136,9 +139,14 @@ class Transporter:
             self.data['cost_per_unit'] = np.ones(num_vehicles, dtype=int)
         else:
             self.data['cost_per_unit'] = cost_per_unit.copy()
+            
+        # if emission_per_unit is None:
+        #     self.data['emission_per_unit'] = np.ones(num_vehicles, dtype=int)
+        # else:
+        #     self.data['emission_per_unit'] = cost_per_unit.copy()
         
         if time_matrix is None:
-            self.time_matrix = np.zeros(distance_matrix.shape)
+            self.time_matrix = distance_matrix/40 #In cities, the average speed is 40 km/h
         else:
             self.time_matrix = time_matrix
         
@@ -233,9 +241,10 @@ class Transporter:
                 
                 text += ' -> ' + str(to_node)
                 
-                route_distance[vehicle_id] += routing.GetArcCostForVehicle(
-                    previous_index, index, vehicle_id
-                )
+                route_distance[vehicle_id] += data['distance_matrix'][from_node][to_node]
+                # routing.GetArcCostForVehicle(
+                #     previous_index, index, vehicle_id
+                # )
                 route_time[vehicle_id] += self.time_matrix[from_node][to_node]
                 # print(route_distance)
                 
