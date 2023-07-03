@@ -6,8 +6,7 @@ import ortools
 
 from transporter import Transporter
 
-from typing import List, Dict, Optional
-# from dataclasses import dataclass
+from typing import Any, List, Dict, Optional
 
 import gymnasium as gym
 from ray.rllib.env import MultiAgentEnv
@@ -25,11 +24,11 @@ class AssignmentGame:
                  grid_size : int = 12,
                  hub : int = 100,
                  seed = None,
-                 max_capacity = 20,
+                 max_capacity = 15,
                  horizon = 1_000,
                  is_VRP = True,
                  emissions_KM = [0, .15, .3, .3],
-                 costs_KM = [2, 3, 4, 4],
+                 costs_KM = [4, 4, 4, 4],
                  CO2_penalty = 1_000,
                  Q = 25,
                  ):
@@ -39,9 +38,8 @@ class AssignmentGame:
         
         assert len(emissions_KM) == len(costs_KM) == num_vehicles
         
-        self.emissions_KM = emissions_KM
-        self.costs_KM = costs_KM
-        self.CO2_penalty = CO2_penalty
+        self.emissions_KM = np.array(emissions_KM)#, dtype=int)
+        self.costs_KM = np.array(costs_KM)
         self.Q = Q
         
         self.info = dict()
@@ -53,17 +51,25 @@ class AssignmentGame:
         self.G = nx.grid_2d_graph(grid_size, grid_size)
         distances = {
             e : {
-                'distance' : np.random.binomial(20, 0.1)+1
+                'distance' : np.random.binomial(12, 0.1)+1
             }
             for e in self.G.edges
         }
         nx.set_edge_attributes(self.G, distances)
-        self.distance_matrix = np.array(nx.floyd_warshall_numpy(self.G, weight = 'distance'), dtype=int)
+        self.distance_matrix = nx.floyd_warshall_numpy(self.G, weight = 'distance')
+        
+        self.omission_cost = 2*np.max(self.distance_matrix) +1
+        
+        self.CO2_penalty = max(CO2_penalty, 2*self.omission_cost)
+        
+        self.cost_matrix = np.array([
+            (self.costs_KM[m] + self.CO2_penalty*self.emissions_KM[m])*self.distance_matrix
+            for m in range(num_vehicles)
+        ], dtype=int)
         
         self.num_vehicles = num_vehicles
         
         self.max_capacity = max_capacity
-        self.omission_cost = 2*np.max(self.distance_matrix) +1
         
         self.horizon = horizon
         
@@ -75,7 +81,7 @@ class AssignmentGame:
                 self.transporter = [
                     Transporter(
                         self.distance_matrix,
-                        cost_per_unit = self.costs_KM + CO2_penalty*self.emissions_KM, 
+                        self.cost_matrix,
                         transporter_hub=hub,
                         omission_cost=self.omission_cost,
                         max_capacity=max_capacity,
@@ -84,8 +90,8 @@ class AssignmentGame:
             else:
                 self.transporter = [
                     Transporter(
-                        self.distance_matrix, 
-                        cost_per_unit = self.costs_KM + CO2_penalty*self.emissions_KM, 
+                        self.distance_matrix,
+                        self.cost_matrix, 
                         transporter_hub=hub,
                         omission_cost=self.omission_cost,
                         max_capacity=max_capacity,
@@ -127,34 +133,55 @@ class AssignmentGame:
         pass
         
     
-    def _compute_cost(self, actions):
+    def _compute_cost(self, actions, time_budget):
         
-        #TODO
-        nodes = [[] for _ in self.transporter]
-        quantities = [[] for _ in self.transporter]
+        # nodes = [[] for _ in self.transporter]
+        # quantities = [[] for _ in self.transporter]
         
-        omission_penalty = 0
-        omitted = 0
+        deliveries = [
+            [
+                self.packages[k]
+                for k in range(len(actions))
+                if actions[k] == m+1
+            ]
+            for m in range(len(self.transporter))
+        ]
         
-        for k in range(len(actions)):
-            if actions[k]:
-                nodes[actions[k]-1].append(self.packages[k].destination)
-                quantities[actions[k]-1].append(self.packages[k].quantity)
-            else:
-                omission_penalty += self.omission_cost*self.packages[k].quantity
-                omitted += 1
-        # print(nodes)
+        nodes = [
+            [d.destination for d in deliveries[m]]
+            for m in range(len(self.transporter))
+        ]
+        quantities = [
+            [d.quantity for d in deliveries[m]]
+            for m in range(len(self.transporter))
+        ]
+        
+        omitted = \
+            np.sum([p.quantity for p in self.packages])\
+            - \
+            np.sum(quantities)#TODO precise quantities
+        omission_penalty = self.omission_cost*omitted
+        
+        # for k in range(len(actions)):
+        #     if actions[k]:
+        #         nodes[actions[k]-1].append(self.packages[k].destination)
+        #         quantities[actions[k]-1].append(self.packages[k].quantity)
+        #     else:
+        #         omission_penalty += self.omission_cost*self.packages[k].quantity
+        #         omitted += 1
+        # # print(nodes)
         total_costs = 0
         total_emissions = 0
         
-        for m in range(len(self.transporter)):
-            distance, time, solution = self.transporter[m].compute_cost(nodes[m], quantities[m])
+        for m in range(len(self.transporter)):#TODO parallelize
+            distance, time, solution = self.transporter[m].compute_cost(nodes[m], quantities[m], time_budget)
             total_costs +=     np.sum(self._get_costs(distance, time))
             total_emissions += np.sum(self._get_emissions(distance, time))
             
         self.info['solution_found'] = np.any(time != 0)
         self.info['costs'] = total_costs
         self.info['time_per_vehicle'] = time
+        self.info['distance_per_vehicle'] = distance
         self.info['excess_emission'] = total_emissions - self.Q
         self.info['omitted'] = omitted
         self.info['solution'] = solution
@@ -191,22 +218,27 @@ class AssignmentGame:
     #     return self.obs
     
     
-    def reset(self, num_packages = None):
+    def reset(self, num_packages = None, packages = None, seed = None):
+        
+        np.random.seed(seed)
         
         if num_packages is None:
             num_packages = self.max_capacity * self.num_vehicles
         else:
             assert num_packages <= self.max_capacity * self.num_vehicles
         # super().reset(seed=seed)
-        destinations = np.random.choice([i for i,_ in enumerate(self.G.nodes) if i!=85], size=num_packages, replace=False)
-        
-        self.packages = [
-            Package(
-                destination=d,
-                quantity=1,#TODO
-            )
-            for d in destinations
-        ]
+        if packages is None:
+            destinations = np.random.choice([i for i,_ in enumerate(self.G.nodes) if i!=85], size=num_packages, replace=False)
+
+            self.packages = [
+                Package(
+                    destination=d,
+                    quantity=1,#TODO
+                )
+                for d in destinations
+            ]
+        else:
+            self.packages = packages
         
         for transporter in self.transporter:
             transporter.reset()
@@ -232,12 +264,12 @@ class AssignmentGame:
     def _get_costs(self, d, t):
         return self.costs_KM*d
         
-    def _get_rewards(self, actions):
+    def _get_rewards(self, actions, time_budget):
         #TODO
         #print('obs is :', self.obs)
         #print('ids is :', self.ids)
         
-        costs = self._compute_cost(actions)
+        costs = self._compute_cost(actions, time_budget)
         
 
         
@@ -246,14 +278,28 @@ class AssignmentGame:
         return -costs
     
         
-    def step(self, actions):
+    def step(self, actions, time_budget = 2):
         self.t += 1
         
         done = self.t >= self.horizon
 
-        return self._get_rewards(actions), done, self.info
+        return self._get_rewards(actions, time_budget), done, self.info
 
 
+class AssignmentEnv(gym.Env):
+    def __init__(self, game : AssignmentGame, num_packages):
+        self._game = game
+        
+    def reset(self, *, seed: int | None = None, packages = None, num_packages = None) -> tuple[np.ndarray, dict[str, Any]]:
+        info = self._game.reset(num_packages, packages, seed)
+        return self._get_observation(), info
+    
+    def step(self, action: np.ndarray, time_budget = 2) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
+        r, done, info = self._game(action, time_budget)
+        return self._get_observation(), r, done, done, info
+    
+    def _get_observation(self):
+        return None#TODO
 
 if __name__ == '__main__':
     game = AssignmentGame()
@@ -265,7 +311,7 @@ if __name__ == '__main__':
     while not done:
         actions = np.ones(K, dtype=int)
         # actions[2] = 0
-        r, d, info = game.step(actions)
+        r, d, info = game.step(actions, time_budget=10)
         done = True
         rewards.append(r)
         print(info)

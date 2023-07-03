@@ -80,7 +80,7 @@ def create_data_model():
     #         536, 194, 798, 0
     #     ],
     # ]
-    
+    K = 20
     G = nx.grid_2d_graph(10, 10)
     distances = {
         e : {
@@ -89,19 +89,28 @@ def create_data_model():
         for e in G.edges
     }
     nx.set_edge_attributes(G, distances)
-    distance_matrix = np.array(nx.floyd_warshall_numpy(G, weight = 'distance'), dtype=int)
+    distance_matrix = nx.floyd_warshall_numpy(G, weight = 'distance')
+    costs_KM = np.array([1,1,1])
+    emissions_KM = np.array([0, .15, .3])
+    cost_matrix = np.array([
+            (costs_KM[m] + 1_000*emissions_KM[m])*distance_matrix
+            for m in range(len(costs_KM))
+    ], dtype=int)
+    # distance_matrix = np.array(nx.floyd_warshall_numpy(G, weight = 'distance'), dtype=int)
     # nx.floyd_warshall_numpy(G)
-    quantities = np.ones(17, dtype=int)
+    quantities = np.ones(K+1, dtype=int)
     quantities[0] = 0
-    nodes = np.random.choice([i for i,_ in enumerate(G.nodes) if i!=85], size=16, replace=False)
+    nodes = np.random.choice([i for i,_ in enumerate(G.nodes) if i!=85], size=K, replace=False)
     
     l = [85] + list(nodes)
-    data['distance_matrix'] = list(distance_matrix[np.ix_(l, l)])
+    x, y = np.ix_(l, l)
+    data['distance_matrix'] = distance_matrix[x, y]
+    data['cost_matrix'] = cost_matrix[:, x, y]
     
     data['demands'] = quantities
     #[0, 1, 1, 2, 4, 2, 2, 8, 8, 1, 2, 1, 2, 4, 4, 8, 8]
-    data['vehicle_capacities'] = [5]
-    data['num_vehicles'] = 1
+    data['vehicle_capacities'] = [10, 10, 10]
+    data['num_vehicles'] = 3
     data['depot'] = 0
     return data
 
@@ -135,10 +144,10 @@ def print_solution(data, manager, routing, solution):
     print('Total load of all routes: {}'.format(total_load))
 
 
-def main():
+def solve(data, time_budget):
     """Solve the CVRP problem."""
     # Instantiate the data problem.
-    data = create_data_model()
+    # data = create_data_model()
 
     # Create the routing index manager.
     manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']),
@@ -148,18 +157,33 @@ def main():
     routing = pywrapcp.RoutingModel(manager)
 
 
-    # Create and register a transit callback.
-    def distance_callback(from_index, to_index):
-        """Returns the distance between the two nodes."""
-        # Convert from routing variable Index to distance matrix NodeIndex.
-        from_node = manager.IndexToNode(from_index)
-        to_node = manager.IndexToNode(to_index)
-        return data['distance_matrix'][from_node][to_node]
+    # # Create and register a transit callback.
+    # def distance_callback(from_index, to_index):
+    #     """Returns the distance between the two nodes."""
+    #     # Convert from routing variable Index to distance matrix NodeIndex.
+    #     from_node = manager.IndexToNode(from_index)
+    #     to_node = manager.IndexToNode(to_index)
+    #     return data['distance_matrix'][from_node][to_node]
+    
+    for m in range(data['num_vehicles']):
+            # Create and register a transit callback.
+        def distance_callback(from_index, to_index):#, vehicle_id):
+            """Returns the distance between the two nodes."""
+            # Convert from routing variable Index to distance matrix NodeIndex.
+            from_node = manager.IndexToNode(from_index)
+            to_node = manager.IndexToNode(to_index)
+            return data['cost_matrix'][m, from_node, to_node]
+        
+        transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+            # lambda from_idx, to_idx : distance_callback(
+                # from_idx, to_idx, m)
+        # )
+        routing.SetArcCostEvaluatorOfVehicle(transit_callback_index, m)
 
-    transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+    # transit_callback_index = routing.RegisterTransitCallback(distance_callback)
 
-    # Define cost of each arc.
-    routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+    # # Define cost of each arc.
+    # routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
     
 
 
@@ -182,10 +206,10 @@ def main():
     # Setting first solution heuristic.
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
     search_parameters.first_solution_strategy = (
-        routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION)
+        routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC)
     search_parameters.local_search_metaheuristic = (
         routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH)
-    search_parameters.time_limit.FromSeconds(1)
+    search_parameters.time_limit.FromSeconds(time_budget)
 
     # Solve the problem.
     solution = routing.SolveWithParameters(search_parameters)
@@ -196,4 +220,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    data = create_data_model()
+    solve(data, 2)

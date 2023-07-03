@@ -3,13 +3,11 @@ import numpy as np
 from assignment import AssignmentGame
 
 #import itertools as it
-import networkx as nx
-from threading import Thread
+import multiprocess as mp
 from numpy import random as rd
-import copy as cp
 from numpy import exp
 
-def recuit(game : AssignmentGame, T_init, T_limit, lamb = .99, var = False, id = 0, log = True) :
+def recuit(game : AssignmentGame, T_init, T_limit, lamb = .99, var = False, id = 0, log = True, H = 500) :
     """
     This function finds a solution for the steiner problem
         using annealing algorithm
@@ -19,14 +17,24 @@ def recuit(game : AssignmentGame, T_init, T_limit, lamb = .99, var = False, id =
     :return: the solution found and the evolution of the best evaluations
     """
     best = np.ones(game.num_packages, dtype=int)
+    solution = best.copy()
     T = T_init
-    eval_best, info = eval_annealing(best, game)
+    r, _, info = game.step(best, time_budget=10)
+    eval_best = -r
+    eval_solution = eval_best
     m = 0
     list_best_costs = [eval_best]
     flag100 = True
+    infos = {
+        'history' : [],
+        'T' : []
+    }
     while(T>T_limit):
-        sol = rand_neighbor(best)
+        infos['T'].append(T)
+        sol = rand_neighbor(solution)
         eval_sol, info = eval_annealing(sol, game)
+        infos['history'].append(info)
+        
         if m%20 == 0 and log:
             print(20*'-')
             print(m)
@@ -37,17 +45,22 @@ def recuit(game : AssignmentGame, T_init, T_limit, lamb = .99, var = False, id =
             print('cost : ', eval_sol)
             print('best cost : ', eval_best)
         if eval_sol < eval_best :
+            best = sol.copy()
+            eval_best = eval_sol
+            
+        if eval_sol < eval_solution :
             prob = 1
         else :
             prob = exp((eval_best - eval_sol)/T)
         rand = rd.random()
         if rand <= prob :
-            best = sol
-            eval_best = eval_sol
+            solution = sol
+            eval_solution = eval_sol
         list_best_costs.append(eval_best)
         T *= lamb
         m += 1
-
+        if m >= H:
+            break
         
         if(var and flag100 and T<=100):
             flag100 = False
@@ -56,10 +69,10 @@ def recuit(game : AssignmentGame, T_init, T_limit, lamb = .99, var = False, id =
 
     print(f'm = {m}')
     print(eval_best)
-    return best, list_best_costs
+    return best, list_best_costs, infos
 
 
-def recuit_multiple(games : List[AssignmentGame], T_init, T_limit = 2, nb_researchers = 2, lamb = .99, log = True):
+def recuit_multiple(games : List[AssignmentGame], T_init, T_limit = 2, nb_researchers = 2, lamb = .99, log = True, H=500):
     """
     This function finds a solution for the steiner problem
         using annealing algorithm with multiple researchers
@@ -70,24 +83,32 @@ def recuit_multiple(games : List[AssignmentGame], T_init, T_limit = 2, nb_resear
     :return: the solution found which is a set of edges
     """
     
-    def process(res : Dict, id):
-        best, list_best_costs = recuit(games[id], T_init = T_init, T_limit = T_limit, lamb = lamb, id = id, log=log)
+    def process(res : Dict, id, q):
+        best, list_best_costs, info = recuit(games[id], T_init = T_init, T_limit = T_limit, lamb = lamb, id = id, log=log, H=H)
         res['sol'] = best
         res['list_best_costs'] = list_best_costs
+        res['info'] = info
+        q.put((id, res))
+        
     
     res = {
         i : dict()
         for i in range(nb_researchers)
     }
     
-    threads = []
+    ps = []
+    q = mp.Queue()
     for i in range(nb_researchers):
-        threads.append(Thread(target = process, args = (res[i], i)))
-        threads[i].start()
+        ps.append(mp.Process(target = process, args = (res[i], i, q)))
+        ps[i].start()
 
     for i in range(nb_researchers):
-        threads[i].join()
-
+        ps[i].join()
+    
+    while not q.empty():
+        i, d = q.get()
+        res[i] = d
+        
     return res
 
 
@@ -120,17 +141,18 @@ def rand_neighbor(solution : np.ndarray, nb_changes = 1) :
 
 
 if __name__ == '__main__' :
-    NB = 7
+    NB = 5
     games = []
+    Q = 30
     for _ in range(NB):
-        game = AssignmentGame(Q=50)
+        game = AssignmentGame(Q=Q)
         K = 50
         game.reset(num_packages = K)
         games.append(game)
     
-    res = recuit_multiple(games, 2000, 1, nb_researchers=NB, log = False)
+    res = recuit_multiple(games, 2000, 1, nb_researchers=NB)
     import pickle
-    with open("res_multiple_SA.pkl","wb") as f:
+    with open(f"res_multiple_SA_K{K}_Q{Q}.pkl","wb") as f:
         pickle.dump(res, f)
     
     bests = np.zeros(len(res))

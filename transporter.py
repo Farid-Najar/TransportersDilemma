@@ -34,13 +34,13 @@ def print_solution(data, manager, routing, solution):
     print('Total distance of all routes: {}m'.format(total_distance))
     print('Total load of all routes: {}'.format(total_load))
     
-def solve(data):
+def solve(data, time_budget):
     """Returns the CVRP solution and routing"""
     
     # # Sets a time limit of 10 seconds.
     # search_parameters.time_limit.seconds = 10
     # Create the routing index manager.
-    manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']),
+    manager = pywrapcp.RoutingIndexManager(len(data['distance']),
                                            data['num_vehicles'], data['depot'])
     # print('n vehicles : ', data['num_vehicles'])
     # print('n vehicles : ', data['distance_matrix'])
@@ -49,27 +49,31 @@ def solve(data):
     # Create Routing Model.
     routing = pywrapcp.RoutingModel(manager)
     
-    # Create and register a transit callback.
-    def distance_callback(from_index, to_index, cost_unit = 1):
-        """Returns the distance between the two nodes."""
-        # Convert from routing variable Index to distance matrix NodeIndex.
-        from_node = manager.IndexToNode(from_index)
-        to_node = manager.IndexToNode(to_index)
-        return data['distance_matrix'][from_node][to_node]*cost_unit
-    
     # transit_callback_index = routing.RegisterTransitCallback(distance_callback)
     
     # print('test', distance_callback(5,7))
     
     # Define cost of each arc.
+    def distance_callback(from_index, to_index, vehicle_id):
+        """Returns the distance between the two nodes."""
+        # Convert from routing variable Index to distance matrix NodeIndex.
+        from_node = manager.IndexToNode(from_index)
+        to_node = manager.IndexToNode(to_index)
+        return data['cost_matrix'][vehicle_id, from_node, to_node]
+    
     # routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
     for m in range(data['num_vehicles']):
+            # Create and register a transit callback.
+        
         transit_callback_index = routing.RegisterTransitCallback(
             lambda from_idx, to_idx : distance_callback(
-                from_idx, to_idx, 
-                data['cost_per_unit'][m])
+                from_idx, to_idx, m)
         )
         routing.SetArcCostEvaluatorOfVehicle(transit_callback_index, m)
+        
+    # print('sdsdsd', distance_callback(3,2, 0))
+    # print('sdsdsd', distance_callback(3,2, 1))
+    # print('sdsdsd', distance_callback(3,2, 2))
     
     # Add Capacity constraint.
     def demand_callback(from_index):
@@ -93,10 +97,11 @@ def solve(data):
     # Setting first solution heuristic.
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
     search_parameters.first_solution_strategy = (
-        routing_enums_pb2.FirstSolutionStrategy.AUTOMATIC)
+        routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC)
     search_parameters.local_search_metaheuristic = (
         routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH)
-    search_parameters.time_limit.FromSeconds(2)
+    search_parameters.time_limit.FromSeconds(time_budget)
+    # search_parameters.use_depth_first_search = True
     
     # Solve the problem.
     solution = routing.SolveWithParameters(search_parameters)
@@ -109,7 +114,7 @@ def solve(data):
 class Transporter:
     def __init__(self, 
                  distance_matrix,
-                 cost_per_unit = None,
+                 cost_matrix,
                 #  emission_per_unit = None,
                  time_matrix = None,
                  omission_cost = 100, 
@@ -132,14 +137,10 @@ class Transporter:
         self.capacity = 0
         self.omission_cost = omission_cost
         self.distance_matrix = distance_matrix
+        self.cost_matrix = cost_matrix
         self.transporter_hub = transporter_hub
         self.nodes = SortedList()
-        
-        if cost_per_unit is None:
-            self.data['cost_per_unit'] = np.ones(num_vehicles, dtype=int)
-        else:
-            self.data['cost_per_unit'] = cost_per_unit.copy()
-            
+
         # if emission_per_unit is None:
         #     self.data['emission_per_unit'] = np.ones(num_vehicles, dtype=int)
         # else:
@@ -166,7 +167,7 @@ class Transporter:
         self.orders.insert(idx, quantity)
         self.cost_history.append(self.last_cost)
         
-    def compute_marginal_cost(self, node : int, quantity : int):
+    def compute_marginal_cost(self, node : int, quantity : int, time_budget = 2):
         """Solve the CVRP problem and computes the additional cost"""
         # Instantiate the data problem.
         data = self.data
@@ -181,7 +182,7 @@ class Transporter:
         l = [self.transporter_hub] + list(new_nodes)
         data['distance_matrix'] = self.distance_matrix[np.ix_(l, l)]
         
-        solution, routing, manager = solve(data)
+        solution, routing, manager = solve(data, time_budget)
         
         # Print solution on console.
         self.last_cost = self.omission_cost + self.cost_history[-1]
@@ -204,24 +205,29 @@ class Transporter:
         return self.last_cost - self.cost_history[-1]
     
 
-    def compute_cost(self, nodes, quantities):
+    def compute_cost(self, nodes, quantities, time_budget = 2):
         """Solve the CVRP problem and computes the total cost and time per vehicle"""
         # Instantiate the data problem.
         data = self.data
         
-        data['demands'] = [0] + list(quantities)
+        data['demands'] = np.zeros(len(quantities)+1, dtype=int)
+        
+        data['demands'][1:] = np.array(quantities, dtype=int)
         
         l = [self.transporter_hub] + list(nodes)
-        data['distance_matrix'] = self.distance_matrix[np.ix_(l, l)]
+        x, y = np.ix_(l, l)
+        data['cost_matrix'] = self.cost_matrix[:, x, y]
+        data['distance'] = self.distance_matrix[x, y]
         
         # print(data['distance_matrix'])
         
-        solution, routing, manager = solve(data)
-    
+        solution, routing, manager = solve(data, time_budget)
         
+        # print_solution(data, manager, routing, solution)
+    
         # If no solution; we penalize all packages (it's a rare event)
         if not solution:
-            return self.omission_cost*len(nodes), 0
+            return self.omission_cost*len(nodes), 0, 'solution not found !'
         
         route_distance = np.zeros(data['num_vehicles'])
         route_time = np.zeros(data['num_vehicles'])
@@ -241,11 +247,11 @@ class Transporter:
                 
                 text += ' -> ' + str(to_node)
                 
-                route_distance[vehicle_id] += data['distance_matrix'][from_node][to_node]
+                route_distance[vehicle_id] += data['distance'][from_node, to_node]
                 # routing.GetArcCostForVehicle(
                 #     previous_index, index, vehicle_id
                 # )
-                route_time[vehicle_id] += self.time_matrix[from_node][to_node]
+                route_time[vehicle_id] += self.time_matrix[from_node, to_node]
                 # print(route_distance)
                 
         return route_distance, route_time, text
@@ -255,16 +261,23 @@ if __name__ == '__main__':
     import networkx as nx
     size = 15
     G = nx.grid_2d_graph(size, size)
+    emissions_KM = [0, .15, .3, .3]
+    costs_KM = [4, 4, 4, 4]
+    CO2_penalty = 1_000
     distance_matrix = nx.floyd_warshall_numpy(G)
-    T1 = Transporter(distance_matrix, num_vehicles=3)
+    cost_matrix = np.array([
+            (costs_KM[m] + CO2_penalty*emissions_KM[m])*distance_matrix
+            for m in range(len(costs_KM))
+    ], dtype=int)
+    T1 = Transporter(distance_matrix, cost_matrix, num_vehicles=4)
     # c = T1.compute_marginal_cost(1, 5)
     # print(c)
     # T1.new_order(1, 5)
     # c = T1.compute_marginal_cost(3, 5)
     # print(c)
     
-    nodes = np.random.choice(len(G.nodes), size=10, replace=False)
-    quantities = np.ones(10, dtype=int)
-    c = T1.compute_cost(nodes, quantities, print_res=True)
-    print(c)
-    print('total cost : ', np.sum(c[0]))
+    nodes = np.random.choice(len(G.nodes), size=size, replace=False)
+    quantities = np.ones(size, dtype=int)
+    route_distance, route_time, text = T1.compute_cost(nodes, quantities)
+    print(text)
+    print('total cost : ', np.sum(route_distance))
