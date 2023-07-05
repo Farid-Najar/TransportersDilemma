@@ -20,7 +20,6 @@ class Package:
 class AssignmentGame:
     def __init__(self, 
                  transporter : Transporter = None,
-                 num_vehicles = 4,
                  grid_size : int = 12,
                  hub : int = 100,
                  seed = None,
@@ -36,7 +35,9 @@ class AssignmentGame:
         # if np.all(np.array(transporters_hubs) >= size**2):
             # raise('transporters\' locations are not smaller than nodes')
         
-        assert len(emissions_KM) == len(costs_KM) == num_vehicles
+        assert len(emissions_KM) == len(costs_KM)
+        
+        num_vehicles = len(emissions_KM)
         
         self.emissions_KM = np.array(emissions_KM)#, dtype=int)
         self.costs_KM = np.array(costs_KM)
@@ -278,7 +279,7 @@ class AssignmentGame:
         return -costs
     
         
-    def step(self, actions, time_budget = 2):
+    def step(self, actions, time_budget = 1):
         self.t += 1
         
         done = self.t >= self.horizon
