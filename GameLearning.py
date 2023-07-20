@@ -16,8 +16,12 @@ def UCB(pi, a, r, mu, N, t, confidence_level = 0.7, *args, **kwargs):
     pi[A] = 1
     return pi
 
-def LRI(pi, a, r, b = 3e-3, *args, **kwargs):
+def LRI(pi, a, r, m, M, b = 3e-3, *args, **kwargs):
     pi_a = pi[a]
+    if M==m:
+        r = 1.
+    else:
+        r = (M-r)/(M-m)
     pi = pi - b*r*pi
     pi[a] = pi_a + b*r*(1-pi_a)
     ps = np.exp(pi)
@@ -53,13 +57,20 @@ class Player:
         return int(rd.choice(len(self.pi), p = self.pi))
     
     def update(self, action, reward):
+        if np.sum(self.N) == 0:
+            self.min = reward
+            self.max = reward
+        else:
+            self.min = min(self.min, reward)
+            self.max = max(self.max, reward)
+            
         self.N[action] += 1
         self.pi = self.strategy(
-            pi = self.pi, a = action, r = reward, mu = self.mu, N = self.N, t = np.sum(self.N)
+            pi = self.pi, a = action, r = reward, mu = self.mu, N = self.N, t = np.sum(self.N), m = self.min, M=self.max
         )
         
 
-def GameLearning(game : AssignmentGame, strategy = UCB, T = 1_000, log = True, res = None):
+def GameLearning(game : AssignmentGame, strategy = UCB, T = 1_000, log = True):
             
     players = [Player(game.num_actions, strategy) for _ in range(game.num_packages)]
     # actions = [players[i].act() for i in range(len(players))]
@@ -70,9 +81,8 @@ def GameLearning(game : AssignmentGame, strategy = UCB, T = 1_000, log = True, r
     for i in range(len(players)):
         players[i].update(best[i], r)
     
-    if res is None:
-        res = dict()
-    res['actions_hist'] = [best]
+    res = dict()
+    # res['actions_hist'] = [best]
     res['rewards'] = np.zeros(T+1)
     res['rewards'][0] = r
     
@@ -87,7 +97,7 @@ def GameLearning(game : AssignmentGame, strategy = UCB, T = 1_000, log = True, r
             print(e)
             print(w)
             break
-        r, _, info = game.step(actions)
+        r, _, info = game.step(actions, call_OR=(t==0))
         for i in range(len(players)):
             players[i].update(actions[i], r)
             
@@ -111,20 +121,19 @@ def GameLearning(game : AssignmentGame, strategy = UCB, T = 1_000, log = True, r
 def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50, log = True):
 
 
-    def process(game, res_dict, q, i):
-        res = GameLearning(game, T=T, strategy=strategy, log = log, res=res_dict)
+    def process(game, q, i):
+        res = GameLearning(game, T=T, strategy=strategy, log = log)
         q.put((i, res))
         # res_dict = d
         
-    q = mp.Queue()
+    q = mp.Manager().Queue()
     res = dict()
     ps = []
     for i in range(n_simulation):
         game = AssignmentGame(Q=Q)
         game.reset(num_packages = K)
-        res[i] = dict()
         # threads.append(Thread(target = process, args = (game, res[i])))
-        ps.append(mp.Process(target = process, args = (game, res[i], q, i,)))
+        ps.append(mp.Process(target = process, args = (game, q, i,)))
         ps[i].start()
         
     for i in range(n_simulation):
@@ -164,4 +173,7 @@ def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50,
     # print('solution : ', sol)
     
 if __name__ == '__main__' :
-    make_different_sims(n_simulation=50, T=50, log=False)
+    make_different_sims(strategy = UCB, n_simulation=100, T=1_000, log=False)
+    # game = AssignmentGame(Q=30)
+    # game.reset(num_packages = 50)
+    # GameLearning(game, strategy=LRI)

@@ -229,32 +229,36 @@ class Transporter:
         if not solution:
             return self.omission_cost*len(nodes), 0, 'solution not found !'
         
-        route_distance = np.zeros(data['num_vehicles'])
-        route_time = np.zeros(data['num_vehicles'])
-        text = 'Routes :'
+        # route_distance = np.zeros(data['num_vehicles'])
+        # route_time = np.zeros(data['num_vehicles'])
+        # text = 'Routes :'
+        
+        routes = [[] for _ in range(data['num_vehicles'])]
         
         for vehicle_id in range(data['num_vehicles']):
             index = routing.Start(vehicle_id)
-            text += '\nvehicle ' + str(vehicle_id) + '\n'
-            text += '0'
+            # text += '\nvehicle ' + str(vehicle_id) + '\n'
+            # text += '0'
+            routes[vehicle_id].append(0)
                 
             while not routing.IsEnd(index):
                 previous_index = index
                 # print(index)
                 index = solution.Value(routing.NextVar(index))
-                from_node = manager.IndexToNode(previous_index)
+                # from_node = manager.IndexToNode(previous_index)
                 to_node = manager.IndexToNode(index)
                 
-                text += ' -> ' + str(to_node)
+                # text += ' -> ' + str(to_node)
+                routes[vehicle_id].append(to_node)
                 
-                route_distance[vehicle_id] += data['distance'][from_node, to_node]
+                # route_distance[vehicle_id] += data['distance'][from_node, to_node]
                 # routing.GetArcCostForVehicle(
                 #     previous_index, index, vehicle_id
                 # )
-                route_time[vehicle_id] += self.time_matrix[from_node, to_node]
+                # route_time[vehicle_id] += self.time_matrix[from_node, to_node]
                 # print(route_distance)
                 
-        return route_distance, route_time, text
+        return routes
          
 
 if __name__ == '__main__':

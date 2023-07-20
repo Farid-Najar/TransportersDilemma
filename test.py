@@ -80,7 +80,7 @@ def create_data_model():
     #         536, 194, 798, 0
     #     ],
     # ]
-    K = 20
+    K = 35
     G = nx.grid_2d_graph(10, 10)
     distances = {
         e : {
@@ -217,6 +217,9 @@ def solve(data, time_budget):
     # Print solution on console.
     if solution:
         print_solution(data, manager, routing, solution)
+    else:
+        print('No solution !')
+        # print('Solution : ', solution)
 
 
 if __name__ == '__main__':

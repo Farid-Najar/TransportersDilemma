@@ -58,8 +58,10 @@ class AssignmentGame:
         }
         nx.set_edge_attributes(self.G, distances)
         self.distance_matrix = nx.floyd_warshall_numpy(self.G, weight = 'distance')
+        self.time_matrix = self.distance_matrix/40 #In cities, the average speed is 40 km/h
+        self.mask = None
         
-        self.omission_cost = 2*np.max(self.distance_matrix) +1
+        self.omission_cost = 4*np.max(self.distance_matrix) +1
         
         self.CO2_penalty = max(CO2_penalty, 2*self.omission_cost)
         
@@ -106,6 +108,7 @@ class AssignmentGame:
         ]
 
         self.seed(seed)
+        self.solutions = [[] for _ in range(len(self.transporter))]
         
     def seed(self, seed = None):
         np.random.seed(seed)
@@ -134,7 +137,7 @@ class AssignmentGame:
         pass
         
     
-    def _compute_cost(self, actions, time_budget):
+    def _compute_cost(self, actions, time_budget, call_OR):
         
         # nodes = [[] for _ in self.transporter]
         # quantities = [[] for _ in self.transporter]
@@ -160,7 +163,7 @@ class AssignmentGame:
         omitted = \
             np.sum([p.quantity for p in self.packages])\
             - \
-            np.sum(quantities)#TODO precise quantities
+            np.sum(quantities)
         omission_penalty = self.omission_cost*omitted
         
         # for k in range(len(actions)):
@@ -174,10 +177,52 @@ class AssignmentGame:
         total_costs = 0
         total_emissions = 0
         
-        for m in range(len(self.transporter)):#TODO parallelize
-            distance, time, solution = self.transporter[m].compute_cost(nodes[m], quantities[m], time_budget)
-            total_costs +=     np.sum(self._get_costs(distance, time))
-            total_emissions += np.sum(self._get_emissions(distance, time))
+        if self.mask is None:
+            if np.sum(actions) == self.num_packages:
+                l = [self.hub] + list(nodes[0])
+                self.mask = np.ix_(l, l)
+            else:
+                raise("You have to call the OR-routing at least once with all packages included !")
+        
+        sol = None
+        
+        if call_OR:
+            for m in range(len(self.transporter)):#TODO parallelize
+                #TODO for the TSP case
+                sol = self.transporter[m].compute_cost(nodes[m], quantities[m], time_budget)
+                
+                if np.sum(actions) == self.num_packages:
+                    self.solutions[m] = sol
+        
+        else:#TODO for the TSP case
+            
+            
+            omitted_packages = np.where(actions == 0)[0] + 1 # important to add 1 to ignore the hub's index 0
+            
+            
+            sol = [
+                [
+                    self.solutions[0][m][i]
+                    for i in range(len(self.solutions[0][m]))
+                    if self.solutions[0][m][i] not in omitted_packages
+                ]
+                for m in range(len(self.solutions[0]))
+            ]
+            
+        distance_matrix = self.distance_matrix[self.mask]
+        time_matrix = self.time_matrix[self.mask]
+        distance = np.zeros(self.num_vehicles)
+        time = np.zeros(self.num_vehicles)
+        for m in range(len(sol)):
+            for i in range(len(sol[m])-1):
+                distance[m] += distance_matrix[sol[m][i], sol[m][i+1]]
+                time[m] += time_matrix[sol[m][i], sol[m][i+1]]
+                
+        
+        total_costs =     np.sum(self._get_costs(distance, time))
+        total_emissions = np.sum(self._get_emissions(distance, time))
+            
+            
             
         self.info['solution_found'] = np.any(time != 0)
         self.info['costs'] = total_costs
@@ -185,7 +230,7 @@ class AssignmentGame:
         self.info['distance_per_vehicle'] = distance
         self.info['excess_emission'] = total_emissions - self.Q
         self.info['omitted'] = omitted
-        self.info['solution'] = solution
+        self.info['solution'] = self.solutions if sol is None else sol
             
         return total_costs + max(0, total_emissions - self.Q)*self.CO2_penalty + omission_penalty
         
@@ -265,26 +310,23 @@ class AssignmentGame:
     def _get_costs(self, d, t):
         return self.costs_KM*d
         
-    def _get_rewards(self, actions, time_budget):
-        #TODO
+    def _get_rewards(self, actions, time_budget, call_OR):
         #print('obs is :', self.obs)
         #print('ids is :', self.ids)
         
-        costs = self._compute_cost(actions, time_budget)
-        
-
+        costs = self._compute_cost(actions, time_budget, call_OR)
         
         # assert rewards[str(winner)]>=0
         
         return -costs
     
         
-    def step(self, actions, time_budget = 1):
+    def step(self, actions, time_budget = 1, call_OR = True):
         self.t += 1
         
         done = self.t >= self.horizon
 
-        return self._get_rewards(actions, time_budget), done, self.info
+        return self._get_rewards(actions, time_budget, call_OR), done, self.info
 
 
 class AssignmentEnv(gym.Env):
@@ -312,8 +354,21 @@ if __name__ == '__main__':
     while not done:
         actions = np.ones(K, dtype=int)
         # actions[2] = 0
-        r, d, info = game.step(actions, time_budget=10)
+        r, d, info = game.step(actions, time_budget=1)
         done = True
+        rewards.append(r)
+        print(info)
+        print(info['solution'])
+        
+        actions[4] = 0
+        actions[5] = 0
+        # actions[2] = 0
+        r, d, info = game.step(actions, call_OR=False)
+        rewards.append(r)
+        print(info)
+        print(info['solution'])
+        
+        r, d, info = game.step(actions)
         rewards.append(r)
         print(info)
         print(info['solution'])
