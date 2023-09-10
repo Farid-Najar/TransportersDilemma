@@ -26,10 +26,8 @@ def recuit(game : AssignmentGame, T_init, T_limit, lamb = .99, var = False, id =
     m = 0
     list_best_costs = [eval_best]
     flag100 = True
-    infos = {
-        'history' : [],
-        'T' : []
-    }
+    infos = []
+    
     while(T>T_limit):
         # infos['T'].append(T)
         sol = rand_neighbor(solution)
@@ -48,6 +46,7 @@ def recuit(game : AssignmentGame, T_init, T_limit, lamb = .99, var = False, id =
         if eval_sol < eval_best :
             best = sol.copy()
             eval_best = eval_sol
+            infos.append(info)
             
         if eval_sol < eval_solution :
             prob = 1
@@ -89,7 +88,7 @@ def recuit_multiple(game : AssignmentGame, T_init, T_limit = 2, nb_researchers =
         best, list_best_costs, info = recuit(g, T_init = T_init, T_limit = T_limit, lamb = lamb, id = id, log=log, H=H)
         res['sol'] = best
         res['list_best_costs'] = list_best_costs
-        # res['info'] = info
+        res['infos'] = info
         q.put((id, res))
         
     

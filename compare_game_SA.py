@@ -146,7 +146,7 @@ def compare(
         strategy.__name__,
         'SA',
         'Greedy Tree Search',
-        'Greedy'
+        'IRWDP'
     ]
     
     plt.boxplot(

@@ -86,6 +86,8 @@ def GameLearning(game : AssignmentGame, strategy = UCB, T = 1_000, log = True):
     res['rewards'] = np.zeros(T+1)
     res['rewards'][0] = r
     
+    res['infos'] = []
+    
     best_reward = r
     
     for t in tqdm(range(T)):
@@ -106,6 +108,7 @@ def GameLearning(game : AssignmentGame, strategy = UCB, T = 1_000, log = True):
         if r > best_reward:
             best_reward = r
             best = actions.copy()
+            res['infos'].append(info)
         if t%20 == 0 and log:
             print(20*'-')
             print(t)
