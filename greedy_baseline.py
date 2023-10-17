@@ -102,6 +102,8 @@ def baseline(
     time_budget = 1,
     full_OR = False,
     OR_every = 1,
+    *args,
+    **kwargs,
     ):
     # vehicles_by_priority = np.argsort(game.emissions_KM)
     

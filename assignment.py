@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import ortools
+from numba import njit
 
 from transporter import Transporter
 
@@ -142,6 +143,98 @@ class AssignmentGame:
         # nodes = [[] for _ in self.transporter]
         # quantities = [[] for _ in self.transporter]
         
+        # @njit
+        # def _aux(
+        #     a,
+        #     packages,
+        #     mask,
+        #     n_vehicles,
+        #     time_budget,
+        #     mask_is_None,
+        #     call,
+        #     d_matrix,
+        #     t_matrix,
+        #     solutions,
+        #     transporter,
+        #     num_packages,
+            
+        # ):
+        #     deliveries = np.array([
+        #         [
+        #             packages[k]
+        #             for k in range(len(a))
+        #             if a[k] == m+1
+        #         ]
+        #         for m in range(n_vehicles)
+        #     ])
+            
+        #     nodes = np.array([
+        #         [d.destination for d in deliveries[m]]
+        #         for m in range(n_vehicles)
+        #     ])
+            
+        #     quantities = np.array([
+        #         [d.quantity for d in deliveries[m]]
+        #         for m in range(n_vehicles)
+        #     ])
+            
+        #     omitted = \
+        #         np.sum([p.quantity for p in packages])\
+        #         - \
+        #         np.sum(quantities)
+            
+        #     # for k in range(len(actions)):
+        #     #     if actions[k]:
+        #     #         nodes[actions[k]-1].append(self.packages[k].destination)
+        #     #         quantities[actions[k]-1].append(self.packages[k].quantity)
+        #     #     else:
+        #     #         omission_penalty += self.omission_cost*self.packages[k].quantity
+        #     #         omitted += 1
+        #     # # print(nodes)
+            
+        #     if mask_is_None:
+        #         if np.sum(a) == num_packages:
+        #             l = [self.hub] + list(nodes[0])
+        #             mask = np.ix_(l, l)
+        #         else:
+        #             print("You have to call the OR-routing at least once with all packages included !")
+            
+        #     # sol = None
+            
+        #     if call:
+        #         for m in range(n_vehicles):#TODO parallelize
+        #             #TODO for the TSP case
+        #             sol = transporter[m].compute_cost(nodes[m], quantities[m], time_budget)
+                    
+        #             if np.sum(actions) == num_packages:
+        #                 solutions[m] = sol
+            
+        #     else:#TODO for the TSP case
+                
+                
+        #         omitted_packages = np.where(a == 0)[0] + 1 # important to add 1 to ignore the hub's index 0
+                
+                
+        #         sol = [
+        #             [
+        #                 solutions[0][m][i]
+        #                 for i in range(len(solutions[0][m]))
+        #                 if solutions[0][m][i] not in omitted_packages
+        #             ]
+        #             for m in range(len(solutions[0]))
+        #         ]
+                
+        #     distance_matrix = d_matrix[mask]
+        #     time_matrix = t_matrix[mask]
+        #     distance = np.zeros(n_vehicles)
+        #     time = np.zeros(n_vehicles)
+        #     for m in range(len(sol)):
+        #         for i in range(len(sol[m])-1):
+        #             distance[m] += distance_matrix[sol[m][i], sol[m][i+1]]
+        #             time[m] += time_matrix[sol[m][i], sol[m][i+1]]
+                    
+        #     return sol, distance, time, omitted, mask
+        
         deliveries = [
             [
                 self.packages[k]
@@ -174,8 +267,6 @@ class AssignmentGame:
         #         omission_penalty += self.omission_cost*self.packages[k].quantity
         #         omitted += 1
         # # print(nodes)
-        total_costs = 0
-        total_emissions = 0
         
         if self.mask is None:
             if np.sum(actions) == self.num_packages:
@@ -218,6 +309,26 @@ class AssignmentGame:
                 distance[m] += distance_matrix[sol[m][i], sol[m][i+1]]
                 time[m] += time_matrix[sol[m][i], sol[m][i+1]]
                 
+        # mask_is_None = self.mask is None
+        # if mask_is_None:
+        #     self.mask = np.zeros(self.num_packages+1)
+            
+        # sol, distance, time, omitted, self.mask = _aux(
+        #     actions,
+        #     self.packages,
+        #     self.mask,
+        #     self.num_vehicles,
+        #     time_budget,
+        #     mask_is_None,
+        #     call_OR,
+        #     self.distance_matrix,
+        #     self.time_matrix,
+        #     self.solutions,
+        #     self.transporter,
+        #     self.num_packages,
+        # )
+        omission_penalty = self.omission_cost*omitted
+        
         
         total_costs =     np.sum(self._get_costs(distance, time))
         total_emissions = np.sum(self._get_emissions(distance, time))
@@ -323,10 +434,11 @@ class AssignmentGame:
         
     def step(self, actions, time_budget = 1, call_OR = True):
         self.t += 1
+        r = self._get_rewards(actions, time_budget, call_OR)
         
-        done = self.t >= self.horizon
+        done = self.info['excess_emission'] <= 0
 
-        return self._get_rewards(actions, time_budget, call_OR), done, self.info
+        return r, done, self.info
 
 
 class AssignmentEnv(gym.Env):
