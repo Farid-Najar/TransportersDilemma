@@ -1,16 +1,14 @@
 from dataclasses import dataclass
-import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-import ortools
 from numba import njit
+from numba.typed import List
 
 from transporter import Transporter
 
-from typing import Any, List, Dict, Optional
+from typing import Any, Dict, Optional
 
 import gymnasium as gym
-from ray.rllib.env import MultiAgentEnv
 
 @dataclass
 class Package:
@@ -30,6 +28,7 @@ class AssignmentGame:
                  emissions_KM = [0, .15, .3, .3],
                  costs_KM = [4, 4, 4, 4],
                  CO2_penalty = 1_000,
+                 K = 50,
                  Q = 25,
                  ):
         
@@ -39,6 +38,8 @@ class AssignmentGame:
         assert len(emissions_KM) == len(costs_KM)
         
         num_vehicles = len(emissions_KM)
+        
+        self.total_capacity = max_capacity * num_vehicles
         
         self.emissions_KM = np.array(emissions_KM)#, dtype=int)
         self.costs_KM = np.array(costs_KM)
@@ -76,6 +77,8 @@ class AssignmentGame:
         self.max_capacity = max_capacity
         
         self.horizon = horizon
+        
+        self.num_packages = K
         
         if transporter is not None:
             self.transporter = transporter
@@ -375,17 +378,18 @@ class AssignmentGame:
     #     return self.obs
     
     
-    def reset(self, num_packages = None, packages = None, seed = None):
+    def reset(self, packages = None, seed = None):
         
         np.random.seed(seed)
         
-        if num_packages is None:
-            num_packages = self.max_capacity * self.num_vehicles
-        else:
-            assert num_packages <= self.max_capacity * self.num_vehicles
+        # if num_packages is None:
+        #     num_packages = self.max_capacity * self.num_vehicles
+        # else:
+        assert self.num_packages <= self.max_capacity * self.num_vehicles
+            
         # super().reset(seed=seed)
         if packages is None:
-            destinations = np.random.choice([i for i,_ in enumerate(self.G.nodes) if i!=85], size=num_packages, replace=False)
+            destinations = np.random.choice([i for i,_ in enumerate(self.G.nodes) if i!=85], size=self.num_packages, replace=False)
 
             self.packages = [
                 Package(
@@ -395,7 +399,12 @@ class AssignmentGame:
                 for d in destinations
             ]
         else:
+            assert len(packages) == self.num_packages
             self.packages = packages
+            assert self.total_capacity >= np.sum([
+                p.quantity
+                for p in packages
+            ])
         
         for transporter in self.transporter:
             transporter.reset()
@@ -411,7 +420,7 @@ class AssignmentGame:
         self.t = 0
         self.info = dict()
         
-        self.num_packages = num_packages
+        # self.num_packages = num_packages
         
         return self.info
     
@@ -441,47 +450,239 @@ class AssignmentGame:
         return r, done, self.info
 
 
-class AssignmentEnv(gym.Env):
-    def __init__(self, game : AssignmentGame, num_packages):
-        self._game = game
-        
-    def reset(self, *, seed: int | None = None, packages = None, num_packages = None) -> tuple[np.ndarray, dict[str, Any]]:
-        info = self._game.reset(num_packages, packages, seed)
-        return self._get_observation(), info
-    
-    def step(self, action: np.ndarray, time_budget = 2) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
-        r, done, info = self._game(action, time_budget)
-        return self._get_observation(), r, done, done, info
-    
-    def _get_observation(self):
-        return None#TODO
 
-if __name__ == '__main__':
-    game = AssignmentGame()
-    K = 50
+@njit
+def get_d_t(
+    a,
+    distance_matrix,
+    time_matrix,
+    initial_solution,
+    quantities,
+    omission_cost,
+    n_vehicles,
+    ):
+    
+    omitted = np.where(a == 0)[0]
+    omission_penalty = omission_cost*np.sum(quantities[omitted])
+    
+        
+    omitted += 1 # important to add 1 to ignore the hub's index 0
+    
+    
+    sol = [
+        [
+            initial_solution[m][i]
+            for i in range(len(initial_solution[m]))
+            if initial_solution[m][i] not in omitted
+        ]
+        for m in range(len(initial_solution))
+    ]
+        
+    distance = np.zeros(n_vehicles)
+    time = np.zeros(n_vehicles)
+    for m in range(len(sol)):
+        for i in range(len(sol[m])-1):
+            distance[m] += distance_matrix[sol[m][i], sol[m][i+1]]
+            time[m] += time_matrix[sol[m][i], sol[m][i+1]]
+            
+    return distance, time, omitted, omission_penalty
+        
+
+class AssignmentEnv(gym.Env):
+    def __init__(self, game : AssignmentGame = None):
+        if game is None:
+            self._game = AssignmentGame()
+        else:            
+            self._game = game
+        
+        d = len(self._game.distance_matrix)
+        self.obs_dim = d**2 + 3*self._game.num_packages
+        print(self.obs_dim)
+        
+        
+        self.observation_space = gym.spaces.Box(0, np.max(self._game.distance_matrix), (1, self.obs_dim))
+        self.action_space = gym.spaces.MultiBinary(self._game.num_packages)
+        
+    def reset(self, 
+              seed: int | None = None,
+              packages = None,
+              time_budget = 1,
+              ) -> tuple[np.ndarray, dict[str, Any]]:
+        
+        self._game.reset(packages, seed)
+        
+        self.quantities = np.array([
+            p.quantity for p in self._game.packages
+        ])
+        
+        self.destinations = np.array([
+            p.destination for p in self._game.packages
+        ])
+        
+        a = np.ones(self._game.num_packages, dtype=int)
+        *_, info = self._game.step(
+            a,
+            time_budget=time_budget,
+        )
+        
+        self.observation = np.reshape(np.concatenate([
+            self._game.distance_matrix.reshape(-1),
+            self.destinations, #destinations for each package
+            self.quantities, #quantites for each package
+            a, # actions
+        ]), (1, -1))
+        
+        print(self.observation.shape)
+        
+        
+        self.initial_routes = List()
+        for lst in self._game.solutions[0]:
+            l = List()
+            for e in lst:
+                l.append(e)
+            self.initial_routes.append(l)
+            
+        return self.observation.copy(), info
+    
+    
+    
+    def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
+        
+        info = dict()
+        # self.initial_routes = List()
+        # for lst in self._game.solutions[0]:
+        #     self.initial_routes.append(lst)
+        
+            
+        self.observation[0][-len(action):] = action
+            
+        distance, time, omitted, omission_penalty = get_d_t(
+            action,
+            self._game.distance_matrix[self._game.mask],
+            self._game.time_matrix[self._game.mask],
+            self.initial_routes,
+            self.quantities,
+            self._game.omission_cost,
+            self._game.num_vehicles,
+        )
+        total_costs =     np.sum(self._game._get_costs(distance, time))
+        total_emissions = np.sum(self._game._get_emissions(distance, time))
+        
+        info['solution_found'] = np.any(time != 0)
+        info['costs'] = total_costs
+        info['time_per_vehicle'] = time
+        info['distance_per_vehicle'] = distance
+        info['excess_emission'] = total_emissions - self._game.Q
+        info['omitted'] = omitted
+        # info['solution'] = self.solutions if sol is None else sol
+        
+        r = -(total_costs + max(0, total_emissions - self._game.Q)*self._game.CO2_penalty + omission_penalty)
+        done = (info['excess_emission']<=0)
+        
+        return self.observation.copy(), r, done, done, info
+
+    
+class AlterActionEnv(gym.Env):
+    
+    def __init__(self, game : AssignmentGame = None):
+        
+        self._env = AssignmentEnv(game)
+        self.observation_space = self._env.observation_space
+        self.action_space = gym.spaces.Discrete(self._env._game.num_packages)
+        
+    def reset(self, *args, **kwargs
+              ) -> tuple[np.ndarray, dict[str, Any]]:
+        
+        self.action = np.ones(self._env._game.num_packages, dtype=int)
+        return self._env(*args, **kwargs)
+    
+    def step(self, a: int) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
+        
+        self.action[a] = 0 if self.action[a] else 1
+        
+        return self._env.step(self.action)
+    
+def test_assignment_game(game = None, K = 500, log = True, plot = True):
+    
+    if game is None:
+        game = AssignmentGame(
+                Q=0,
+                grid_size=45,
+                max_capacity=125,
+                K=K,
+            )
+    # game = AssignmentGame()
     rewards = []
-    game.reset(num_packages = K)
+    game.reset()
     
     done = False
+    i = 0
+    actions = np.ones(game.num_packages, dtype=int)
+    r, done, info = game.step(actions)
     while not done:
-        actions = np.ones(K, dtype=int)
-        # actions[2] = 0
-        r, d, info = game.step(actions, time_budget=1)
-        done = True
         rewards.append(r)
-        print(info)
-        print(info['solution'])
+        if log:
+            print(info)
+            print(info['solution'])
+        actions[i] = 0
+        i += 1
+        if i == K:
+            break
+        r, done, info = game.step(actions, call_OR=False)
         
-        actions[4] = 0
-        actions[5] = 0
-        # actions[2] = 0
-        r, d, info = game.step(actions, call_OR=False)
-        rewards.append(r)
-        print(info)
-        print(info['solution'])
+    if log:
+        print('rewards', rewards)
+    if plot:
+        import matplotlib.pyplot as plt
+        plt.plot(rewards)
+        plt.show()
         
-        r, d, info = game.step(actions)
+
+def test_assignment_env(game = None, K = 500, log = True, plot = True):
+    if game is None:
+        game = AssignmentGame(
+                Q=0,
+                grid_size=45,
+                max_capacity=125,
+                K = K
+            )
+    env = AssignmentEnv(game)
+    rewards = []
+    env.reset()
+    
+    
+    done = False
+    i = 0
+    actions = np.ones(game.num_packages, dtype=int)
+    while not done:
+        # actions[2] = 0
+        _, r, done, _, info = env.step(actions)
+        # done = True
+        actions[i] = 0
+        i += 1
+        if i == K:
+            break
         rewards.append(r)
-        print(info)
-        print(info['solution'])
-    print('rewards', rewards)
+        if log:
+            print(info)
+
+    if log:
+        print('rewards', rewards)
+        
+    if plot:
+        import matplotlib.pyplot as plt
+        plt.plot(rewards)
+        plt.show()
+
+if __name__ == '__main__':
+    game = AssignmentGame(
+            Q=0,
+            K = 500,
+            grid_size=45,
+            max_capacity=125
+        )
+    
+    # test_assignment_game(game, log = False)
+    # print('game ok!')
+    test_assignment_env(game, log = False)
+    print('env ok!')

@@ -144,9 +144,9 @@ if __name__ == '__main__' :
     NB = 5
     games = []
     Q = 30
-    game = AssignmentGame(Q=Q)
     K = 50
-    game.reset(num_packages = K)
+    game = AssignmentGame(Q=Q, K=K)
+    game.reset()
         # games.append(game)
     
     res = recuit_multiple(game, 2000, 1, nb_researchers=NB)

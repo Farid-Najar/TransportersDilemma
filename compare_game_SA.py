@@ -66,8 +66,8 @@ def compare(
     ps = []
 
     for i in range(n_simulation):
-        game = AssignmentGame(Q=Q)
-        game.reset(num_packages = K)
+        game = AssignmentGame(Q=Q, K = K)
+        game.reset()
         # threads.append(Thread(target = process, args = (game, res[i])))
         ps.append(mp.Process(target = process_game, args = (deepcopy(game), i, q_game,)))
         ps.append(mp.Process(target = process_multiple_SA, args = (deepcopy(game), i, q_SA,)))

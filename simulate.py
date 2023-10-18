@@ -49,10 +49,11 @@ def simulate(
     for i in range(n_simulation):
         game = AssignmentGame(
             Q=Q,
+            K = K,
             grid_size=max(12, int(np.sqrt(K))+2),
             max_capacity=K//4+1
         )
-        game.reset(num_packages = K)
+        game.reset()
         # threads.append(Thread(target = process, args = (game, res[i])))
         ps.append(mp.Process(target = process_A_Star, args = (deepcopy(game), i, q,)))
         ps[i].start()
@@ -81,8 +82,8 @@ if __name__ == '__main__':
     simulate(
         A_Star,
         n_simulation = 100,
-        Q=30,
-        K=100,
+        Q=3,
+        K=10,
         # max_time = 60,
         # time_budget=5
         # add_text='woCompile'

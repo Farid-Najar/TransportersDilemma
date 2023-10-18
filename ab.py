@@ -135,8 +135,8 @@ def simulate(
     ps = []
 
     for i in range(n_simulation):
-        game = AssignmentGame(Q=30)
-        game.reset(num_packages = 50)
+        game = AssignmentGame(Q=Q, K = K)
+        game.reset()
         # threads.append(Thread(target = process, args = (game, res[i])))
         ps.append(mp.Process(target = process_alphabeta, args = (deepcopy(game), i, q,)))
         ps[i].start()
