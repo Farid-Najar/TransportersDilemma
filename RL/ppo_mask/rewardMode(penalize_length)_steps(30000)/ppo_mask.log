@@ -1,0 +1,46 @@
+INFO - root :
+Train PPO maskable started ! 
+
+INFO - root :
+
+        Environment information
+        Grid size = 12
+        Q = 25
+        K = 50
+        n_vehicles = 4
+         
+
+INFO - root :
+Number of CPUs = 8 
+
+INFO - root :
+Before training :
+ mean, std = -49.0, 0.0 
+
+INFO - root :
+After training :
+ mean, std = -39.599998474121094, 2.870539903640747 
+
+INFO - root :
+Train PPO maskable started ! 
+
+INFO - root :
+
+        Environment information
+        Grid size = 12
+        Q = 25
+        K = 50
+        n_vehicles = 4
+         
+
+INFO - root :
+Number of CPUs = 8 
+
+INFO - root :
+Before training :
+ mean, std = -4938155.5, 701716.25 
+
+INFO - root :
+After training :
+ mean, std = -2122113.5, 434003.125 
+
