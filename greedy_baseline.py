@@ -1,5 +1,5 @@
 import numpy as np
-from assignment import AssignmentGame
+from assignment import AssignmentGame, AssignmentEnv
 import pickle
 from time import time
 import multiprocess as mp
@@ -98,7 +98,7 @@ def eliminate_max_median(game : AssignmentGame, time_budget = 1):
     return res
 
 def baseline(
-    game : AssignmentGame,
+    game : AssignmentEnv,
     time_budget = 1,
     full_OR = False,
     OR_every = 1,
@@ -116,9 +116,11 @@ def baseline(
     #     d.destination for d in game.packages
     # ]
     
-    action = np.ones(game.num_packages, dtype=bool)
-    rewards = np.zeros(game.num_packages)
-    excess_emission = np.zeros(game.num_packages)
+    num_packages = game._game.num_packages
+    
+    action = np.ones(num_packages, dtype=bool)
+    rewards = np.zeros(num_packages)
+    excess_emission = np.zeros(num_packages)
     infos = []#[dict() for _ in range(len(action))]
     # omitted = np.zeros(game.num_packages)
     
@@ -132,14 +134,14 @@ def baseline(
     
     # A = game.distance_matrix[x, y]@np.diag(1/q)
     # indices = np.flip(np.argsort(np.mean(A[1:, 1:] + np.max(A[1:, 1:])*np.eye(len(A[1:, 1:])), axis=1)))
-    r_best, _, info = game.step(action.astype(int), time_budget, call_OR=True)
+    _, r_best, _, _, info = game.step(action.astype(int))
     
     emission = info['excess_emission']
     # o = info['omitted']
     
-    indices = list(range(game.num_packages))
+    indices = list(range(num_packages))
     
-    for t in range(game.num_packages):
+    for t in range(num_packages):
         excess_emission[t] = emission
         # omitted[t] = o
         rewards[t] = r_best
@@ -152,7 +154,7 @@ def baseline(
         for i in indices:
             a = action.copy()
             a[i] = not a[i]
-            r, _, info = game.step(a.astype(int), time_budget, call_OR=(full_OR and t%OR_every == 0))
+            _, r,_, _, info = game.step(a.astype(int))#, time_budget, call_OR=(full_OR and t%OR_every == 0))
             # action = np.ones(game.num_packages, dtype=bool)
             
             if r > r_best:

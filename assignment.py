@@ -1,13 +1,16 @@
+from copy import deepcopy
 from dataclasses import dataclass
 import networkx as nx
 import numpy as np
 from numba import njit
 from numba.typed import List
+from sklearn.preprocessing import MinMaxScaler
+from sklearn import preprocessing
 
 from transporter import Transporter
 
 from typing import Any, Dict, Optional
-
+from time import time
 import gymnasium as gym
 
 @dataclass
@@ -27,7 +30,7 @@ class AssignmentGame:
                  is_VRP = True,
                  emissions_KM = [0, .15, .3, .3],
                  costs_KM = [4, 4, 4, 4],
-                 CO2_penalty = 1_000,
+                 CO2_penalty = 10_000,
                  K = 50,
                  Q = 25,
                  ):
@@ -63,14 +66,16 @@ class AssignmentGame:
         self.time_matrix = self.distance_matrix/40 #In cities, the average speed is 40 km/h
         self.mask = None
         
-        self.omission_cost = 4*np.max(self.distance_matrix) +1
         
+        self.omission_cost = (2*np.max(self.distance_matrix) +1)*np.max(self.costs_KM)
+        #np.sum(self._get_costs(2*np.max(self.distance_matrix) +1, 0))
         self.CO2_penalty = max(CO2_penalty, 2*self.omission_cost)
         
         self.cost_matrix = np.array([
             (self.costs_KM[m] + self.CO2_penalty*self.emissions_KM[m])*self.distance_matrix
             for m in range(num_vehicles)
         ], dtype=int)
+        
         
         self.num_vehicles = num_vehicles
         
@@ -389,7 +394,7 @@ class AssignmentGame:
             
         # super().reset(seed=seed)
         if packages is None:
-            destinations = np.random.choice([i for i,_ in enumerate(self.G.nodes) if i!=85], size=self.num_packages, replace=False)
+            destinations = np.random.choice([i for i,_ in enumerate(self.G.nodes) if i!=self.hub], size=self.num_packages, replace=False)
 
             self.packages = [
                 Package(
@@ -524,7 +529,18 @@ def get_d_t(
 
 
 class AssignmentEnv(gym.Env):
-    def __init__(self, game : AssignmentGame = None, obs_mode = 'routes'):
+    def __init__(self, 
+                 game : AssignmentGame = None, 
+                 saved_routes = None,
+                 saved_dests = None,
+                 obs_mode = 'routes',
+                 change_instance = True,
+                 instance_id = 0,
+                 shuffle = True
+                 ):
+        
+        super().__init__()
+        
         if game is None:
             self._game = AssignmentGame()
         else:            
@@ -535,15 +551,34 @@ class AssignmentEnv(gym.Env):
             self.obs_dim = d**2 + 3*self._game.num_packages +1
             
         elif obs_mode == 'routes':
-            self.obs_dim = ((2*(self._game.max_capacity+2)-1)*self._game.num_vehicles) + 3*self._game.num_packages +1
+            self.obs_dim = ((2*(self._game.max_capacity+2)-1)*self._game.num_vehicles) + 2*self._game.num_packages +1
+            
+        elif obs_mode == 'action':
+            self.obs_dim = self._game.num_packages 
             
         else:
             raise("The given obs mode is not recognised !")
         
         self.obs_mode = obs_mode
+        if saved_routes is not None:
+            assert saved_dests is not None
+            assert len(saved_routes) == len(saved_dests)
+            self.order = np.arange(len(saved_dests), dtype=int)
+            if shuffle:
+                np.random.shuffle(self.order)
+            
+        self.change_instance = change_instance
+        self.saved_routes = saved_routes
+        self.saved_dests = saved_dests
+        # self.new_routes = []
+        # self.new_dests = []
+        self.reset_counter = instance_id
         # print(self.obs_dim)
         
         
+        if obs_mode == 'action':
+            self.observation_space = gym.spaces.MultiBinary(self._game.num_packages)
+            
         self.observation_space = gym.spaces.Box(0, 1e10, (self.obs_dim,), np.float64) #TODO Give better upper bound
         self.action_space = gym.spaces.MultiBinary(self._game.num_packages)
         
@@ -555,21 +590,88 @@ class AssignmentEnv(gym.Env):
               **kwargs,
               ) -> tuple[np.ndarray, dict[str, Any]]:
         
+        if self.saved_routes is not None:
+            # np.zeros((self._game.num_vehicles, 2*(self._game.max_capacity+2)-1))
+            if self.reset_counter == len(self.saved_routes):
+                self.reset_counter = 0
+                # self.saved_dests = np.concatenate([
+                #     self.saved_dests,
+                #     np.array(self.new_dests)
+                # ])
+                # self.saved_routes = np.concatenate([
+                #     self.saved_routes,
+                #     np.array(self.new_routes)
+                # ])
+                # self.new_routes = []
+                # self.new_dests = []
+                np.random.shuffle(self.order)
+                assert self.saved_routes.shape[1:] == (self._game.num_vehicles, 2*(self._game.max_capacity+2)-1)
+                # name = str(time())
+                # np.save(name + '_routes', np.array(self.new_routes))
+                # np.save(name + '_dests', np.array(self.new_dests))
+                
+            self.destinations = np.array(self.saved_dests[self.order[self.reset_counter]], dtype=int)
+            packages = [
+                Package(
+                    destination=d,
+                    quantity=1,#TODO
+                )
+                for d in self.destinations
+            ]
+        
         self._game.reset(packages, seed)
+        
+        if self.saved_routes is None:# or self.reset_counter%500 == 0:
+            self.destinations = np.array([
+                p.destination for p in self._game.packages
+            ])
+        
         
         self.quantities = np.array([
             p.quantity for p in self._game.packages
         ])
         
-        self.destinations = np.array([
-            p.destination for p in self._game.packages
-        ])
+        # Costs + emission penalty
+        l = [self._game.hub] + list(self.destinations)
+        self.mask = np.ix_(l, l)
+        self.distance_matrix = self._game.distance_matrix[self.mask]
+        self.costs_matrix = np.array([
+            (self._game.costs_KM[m] + self._game.CO2_penalty*self._game.emissions_KM[m])*self.distance_matrix
+            for m in range(len(self._game.costs_KM))
+        ])# TODO for more complexe cost functions
+        
+        self.time_matrix = self._game.time_matrix[self._game.mask]
         
         a = np.ones(self._game.num_packages, dtype=int)
-        *_, info = self._game.step(
-            a,
-            time_budget=time_budget,
-        )
+        if self.saved_routes is None:# or self.reset_counter%500 == 0:
+            *_, info = self._game.step(
+                a,
+                time_budget=time_budget,
+            )
+            
+        else:
+            self.initial_routes = self.saved_routes[self.order[self.reset_counter]]
+            _, distance, _, omitted, _ = get_d_t(
+                a,
+                self.distance_matrix,
+                self.costs_matrix,
+                self.time_matrix,
+                self.initial_routes,
+                self.quantities,
+                self._game.omission_cost,
+                self._game.num_vehicles,
+            )
+            
+            total_costs =     np.sum(self._game._get_costs(distance, time))
+            total_emissions = np.sum(self._game._get_emissions(distance, time))
+            info = dict()
+            info['solution_found'] = np.any(time != 0)
+            info['costs'] = total_costs
+            info['time_per_vehicle'] = time
+            info['distance_per_vehicle'] = distance
+            info['excess_emission'] = total_emissions - self._game.Q
+            info['omitted'] = omitted
+            # info['solution'] = self.solutions if sol is None else sol
         
         
         # self.initial_routes = List()
@@ -579,27 +681,29 @@ class AssignmentEnv(gym.Env):
         #         l.append(e)
         #     self.initial_routes.append(l)
         
-        # Costs + emission penalty
-        self.distance_matrix = self._game.distance_matrix[self._game.mask]
-        self.costs_matrix = np.array([
-            (self._game.costs_KM[m] + self._game.CO2_penalty*self._game.emissions_KM[m])*self.distance_matrix
-            for m in range(len(self._game.costs_KM))
-        ])# TODO for more complexe cost functions
         
-        self.time_matrix = self._game.time_matrix[self._game.mask]
         
         # print( 2*(self._game.max_capacity) - 1)
-        self.initial_routes = np.zeros((self._game.num_vehicles, 2*(self._game.max_capacity+2)-1))
-        for i in range(len(self._game.solutions[0])):
-            for j in range(len(self._game.solutions[0][i])-1):
-                self.initial_routes[i, 2*j] = self._game.solutions[0][i][j]
-                self.initial_routes[i, 2*j + 1] = self.costs_matrix[i][self._game.solutions[0][i][j], self._game.solutions[0][i][j+1]]
-                #self._game.distance_matrix[self._game.solutions[0][i][j], self._game.solutions[0][i][j+1]]
+        if self.saved_routes is None:# or self.reset_counter%500 == 0:
+            self.initial_routes = np.zeros((self._game.num_vehicles, 2*(self._game.max_capacity+2)-1))
+            for i in range(len(self._game.solutions[0])):
+                for j in range(len(self._game.solutions[0][i])-1):
+                    self.initial_routes[i, 2*j] = self._game.solutions[0][i][j]
+                    self.initial_routes[i, 2*j + 1] = self.costs_matrix[i][self._game.solutions[0][i][j], self._game.solutions[0][i][j+1]]
+                    #self._game.distance_matrix[self._game.solutions[0][i][j], self._game.solutions[0][i][j+1]]
+                    
+            # self.new_routes.append(deepcopy(self.initial_routes))
+            # self.new_dests.append(deepcopy(self.destinations))
+                    
+        # else:
+        #     self.initial_routes = self.saved_routes[self.order[self.reset_counter]]
+        if self.change_instance:
+            self.reset_counter += 1
             
         if self.obs_mode == 'distance_matrix':
             self.observation = np.reshape(np.concatenate([
                 self._game.distance_matrix.reshape(-1),
-                self.destinations, #destinations for each package
+                np.sort(self.destinations), #destinations for each package
                 self.quantities, #quantites for each package
                 [
                   info['excess_emission']
@@ -610,13 +714,16 @@ class AssignmentEnv(gym.Env):
         if self.obs_mode == 'routes':#TODO finish the work
             self.observation = np.reshape(np.concatenate([
                 self.initial_routes.reshape(-1),
-                self.destinations, #destinations for each package
+                # self.destinations, #destinations for each package
                 self.quantities, #quantites for each package
                 [
                   info['excess_emission']
                 ], #complemantary informations
                 a, # actions
             ]), (-1))
+            
+        if self.obs_mode == 'action':
+            self.observation = a
             
         assert self.observation.size == self.obs_dim
         
@@ -635,7 +742,6 @@ class AssignmentEnv(gym.Env):
         #     self.initial_routes.append(lst)
         
             
-        self.observation[-len(action):] = action
             
         routes, distance, time, omitted, omission_penalty = get_d_t(
             action,
@@ -647,6 +753,8 @@ class AssignmentEnv(gym.Env):
             self._game.omission_cost,
             self._game.num_vehicles,
         )
+        
+        self.observation[-len(action):] = action
         if self.obs_mode == 'routes':
             self.observation[:routes.size] = routes.reshape(-1)
             
@@ -662,7 +770,8 @@ class AssignmentEnv(gym.Env):
         info['excess_emission'] = total_emissions - self._game.Q
         info['omitted'] = omitted
         # info['solution'] = self.solutions if sol is None else sol
-        self.observation[-len(action)-1] = info['excess_emission']
+        if self.obs_mode != 'action':
+            self.observation[-len(action)-1] = info['excess_emission']
         
         r = -(total_costs + max(0, total_emissions - self._game.Q)*self._game.CO2_penalty + omission_penalty)
         done = bool(info['excess_emission']<=0)
@@ -723,21 +832,34 @@ class AlterActionEnv(gym.Env):
 class RemoveActionEnv(gym.Env):
     
     def __init__(self, 
-                 game : AssignmentGame = None, 
-                 rewards_mode = 'heuristic'
+                 rewards_mode = 'heuristic',
+                 action_mode = 'destinations', # possible values ['destinations', 'all_nodes']
+                 *args,
+                 **kwargs,
+                #  game : AssignmentGame = None,
+                #  saved_routes = None,
+                #  saved_dests = None,
+                #  obs_mode = 'routes'
                  ):
         
         super().__init__()
         
-        self._env = AssignmentEnv(game)
+        self._env = AssignmentEnv(*args, **kwargs)#game, saved_routes, saved_dests, obs_mode)
         self.rewards_mode = rewards_mode
-        self.observation_space = self._env.observation_space
-        self.action_space = gym.spaces.Discrete(self._env._game.num_packages)
-        self.action = np.ones(self._env._game.num_packages, dtype=int)
+        # self.action = np.ones(self._env._game.num_packages, dtype=int)
+        
+        if action_mode == 'all_nodes':
+            self.action_mask = np.zeros(self._env._game.grid_size**2, dtype=bool)
+            self.action_space = gym.spaces.Discrete(len(self.action_mask))
+            self.observation_space = gym.spaces.MultiBinary(len(self.action_mask))
+        else:
+            self.observation_space = self._env.observation_space
+            self.action_space = gym.spaces.Discrete(self._env._game.num_packages)
         self.invalid_actions = []
         self.n_invalid_actions = 0
         
-        self.H = len(self.action)
+        self.action_mode = action_mode
+        self.H = self._env._game.num_packages
         
     # @property
     # def invalid_actions(self):
@@ -748,35 +870,53 @@ class RemoveActionEnv(gym.Env):
     #     return self.action.size - np.sum(self.action)
     
     def action_masks(self):
+        if self.action_mode == 'all_nodes':
+            return self.action_mask
         return self.action == 1
         
     def reset(self, *args, **kwargs
               ) -> tuple[np.ndarray, dict[str, Any]]:
         
+        obs, info = self._env.reset(*args, **kwargs)
+        
+        if self.action_mode == 'all_nodes':
+            self.destinations = np.array(self._env.destinations, dtype=np.int16)
+            self.action_mask = np.zeros(self._env._game.grid_size**2, dtype=bool)
+            self.action_mask[self.destinations] = True
+            obs = self.action_mask.astype(int)
+            
         self.action = np.ones(self._env._game.num_packages, dtype=int)
         self.t = 0
         self.invalid_actions = []
         self.n_invalid_actions = 0
 
-        return self._env.reset(*args, **kwargs)
+        return obs, info
     
     def step(self, a: int) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         
+        if self.action_mode == 'all_nodes':
+            self.action_mask[a] = False
+            a = (self.destinations[:, None] == a).argmax(axis=0)
         self.action[a] = 0
         self.invalid_actions.append(a)
         self.n_invalid_actions += 1
         self.t += 1
         obs, r, d, _, info = self._env.step(self.action)
+        
+        if self.action_mode == 'all_nodes':
+            obs = self.action_mask.astype(int)
+            
         done = d or bool(self.t > (self.H-1))
         
         if self.rewards_mode == 'terminal':
             r = float(done)*(r+1e5)
             
         elif self.rewards_mode == 'normalized_terminal':
-            r = float(done)*(r+1e5)/1e5
+            r = np.clip(float(done)*(r+1e5)/1e5, 0, 1)
             
         elif self.rewards_mode == 'penalize_length':
-            r = -float(not done)
+            r = -float(not done) + float(done)*10
+        
             
         return obs, r, done, done, info
     
@@ -832,16 +972,100 @@ class CombActionEnv(gym.Env):
         done = d or bool(self.t > (self.H-1))
         
         if self.rewards_mode == 'terminal':
-            r = float(done)*(r+1e5)
+            r = float(done)*(r+2e4)
             
         elif self.rewards_mode == 'normalized_terminal':
-            r = float(done)*(r+1e5)/1e5
+            r = float(done)*(r+2e4)/2e4
             
         elif self.rewards_mode == 'penalize_length':
             r = -float(not done)
             
         return obs, r, done, done, info
 
+# taken from https://github.com/openai/baselines/blob/master/baselines/common/vec_env/vec_normalize.py
+class RunningMeanStd(object):
+    def __init__(self, epsilon=1e-10, shape=()):
+        self.mean = np.zeros(shape, 'float64')
+        self.var = np.ones(shape, 'float64')
+        self.count = epsilon
+
+    def update(self, x):
+        batch_mean = np.mean([x], axis=0)
+        batch_var = np.var([x], axis=0)
+        batch_count = 1
+        self.update_from_moments(batch_mean, batch_var, batch_count)
+
+    def update_from_moments(self, batch_mean, batch_var, batch_count):
+        self.mean, self.var, self.count = update_mean_var_count_from_moments(
+            self.mean, self.var, self.count, batch_mean, batch_var, batch_count)
+        
+def update_mean_var_count_from_moments(mean, var, count, batch_mean, batch_var, batch_count):
+    delta = batch_mean - mean
+    tot_count = count + batch_count
+
+    new_mean = mean + delta * batch_count / tot_count
+    m_a = var * count
+    m_b = batch_var * batch_count
+    M2 = m_a + m_b + np.square(delta) * count * batch_count / tot_count
+    new_var = M2 / tot_count
+    new_count = tot_count
+
+    return new_mean, new_var, new_count
+
+class NormalizedEnv(gym.core.Wrapper):
+    def __init__(self, env, ret=False, clipob=1., cliprew=1., gamma=0.99, epsilon=1e-8):
+        super(NormalizedEnv, self).__init__(env)
+        self.routes_size = (self.env._env._game.num_vehicles)*(2*(self.env._env._game.max_capacity+2)-1)
+        self.ob_rms = RunningMeanStd(shape=(self.routes_size,))
+        self.ret_rms = RunningMeanStd(shape=(1,)) if ret else None
+        self.clipob = clipob
+        self.cliprew = cliprew
+        self.ret = np.zeros(())
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.Q = self.env._env._game.Q
+        self.observation_space = gym.spaces.Box(0, 1, (self.env._env.observation_space.shape[-1],), np.float64)
+        self.action_masks = self.unwrapped.action_masks
+        
+
+
+    def step(self, action):
+        obs, rews, d, t, info = self.env.step(action)
+        info['real_reward'] = rews
+        # print("before", self.ret)
+        self.ret = self.ret * self.gamma + rews
+        # print("after", self.ret)
+        obs[:self.routes_size] = self._obfilt(obs[:self.routes_size])
+        if self.ret_rms:
+            self.ret_rms.update(np.array([self.ret].copy()))
+            rews = np.clip(rews / np.sqrt(self.ret_rms.var + self.epsilon), 0, self.cliprew)
+        self.ret = self.ret * (1-float(d))
+        
+        obs[-len(self.env.action)-1] = np.clip(
+            info['excess_emission']/self.Q,
+            0, 1
+        )
+        return obs, rews, d, t, info
+
+    def _obfilt(self, obs):
+        self.ob_rms.update(obs)
+        obs = np.clip((obs - self.ob_rms.mean) / np.sqrt(self.ob_rms.var + self.epsilon), 0, self.clipob)
+        return obs
+
+    def reset(self, *args, **kwargs):
+        self.ret = np.zeros(())
+        obs, info = self.env.reset(*args, **kwargs)
+        obs[:self.routes_size] = self._obfilt(obs[:self.routes_size])
+        
+        obs[self.routes_size:-len(self.env.action)-1] = preprocessing.normalize(
+                [obs[self.routes_size:-len(self.env.action)-1]]
+        )[0]
+        obs[-len(self.env.action)-1] = np.clip(
+            info['excess_emission']/self.Q,
+            0, 1
+        )
+        return obs, info
+    
 def test_assignment_game(game = None, K = 500, log = True, plot = True):
     
     if game is None:

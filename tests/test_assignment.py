@@ -1,4 +1,5 @@
-from assignment import AssignmentGame, AssignmentEnv, test_assignment_AlterAction_env, RemoveActionEnv, CombActionEnv
+import pickle
+from assignment import AssignmentGame, AssignmentEnv, test_assignment_AlterAction_env, RemoveActionEnv, CombActionEnv, NormalizedEnv
 import numpy as np
 import unittest
 
@@ -60,9 +61,14 @@ def test_assignment_env(game = None, K = 50, log = False, plot = False):
     
     K = game.num_packages
     
+    d = set()
+    
     for l in range(len(env._game.solutions[0])):
         for i in range(len(env._game.solutions[0][l])):
+            # d.add(env.initial_routes[l, 2*i])
             assert env.initial_routes[l, 2*i] == env._game.solutions[0][l][i]
+            
+    # assert d == set(env.destinations)
     
     
     done = False
@@ -132,6 +138,8 @@ class TestAssignment(unittest.TestCase):
         while True:
             self.assertTrue(np.sum(env.action_masks()) == env.H-i)
             o, r, d, _, info = env.step(i)
+            if not d:
+                self.assertTrue(env.observation_space.contains(o))
             self.assertTrue((o[-env.H:] == env.action).all())
             if info['excess_emission'] <= 0:
                 self.assertTrue(d)
@@ -170,6 +178,57 @@ class TestAssignment(unittest.TestCase):
             # self.assertTrue(env.n_invalid_actions == i)
             # self.assertTrue(len(env.invalid_actions) == i)
         
+    def test_NormalizedEnv(self):
+        env = NormalizedEnv(RemoveActionEnv())
+        self.assertTrue(env.n_invalid_actions == 0)
+        self.assertTrue(len(env.invalid_actions) == 0)
+        env.reset()
+        i = 0
+        k = np.sum(env.action_masks())
+        while True:
+            self.assertTrue(np.sum(env.action_masks()) == env.H-i)
+            o, r, d, _, info = env.step(i)
+            self.assertTrue(env.observation_space.contains(o))
+            self.assertTrue((o[-env.H:] == env.action).all())
+            if info['excess_emission'] <= 0:
+                self.assertTrue(d)
+                # print(r)
+                # print(i)
+            if i >=env.H-1:
+                self.assertTrue(d)
+                self.assertTrue(np.sum(env.action_masks()) == 0)
+                break
+            i+=1
+            self.assertTrue(env.n_invalid_actions == i)
+            self.assertTrue(len(env.invalid_actions) == i)
+            
+    def test_NormalizedEnv_w_dataset(self):
+        routes = np.load('TransportersDilemma/RL/routes.npy')
+        dests = np.load('TransportersDilemma/RL/destinations.npy')
+        with open('TransportersDilemma/RL/game.pkl', 'rb') as f:
+            g = pickle.load(f)
+        env = NormalizedEnv(RemoveActionEnv(g, saved_routes=routes, saved_dests=dests))
+        self.assertTrue(env.n_invalid_actions == 0)
+        self.assertTrue(len(env.invalid_actions) == 0)
+        env.reset()
+        i = 0
+        k = np.sum(env.action_masks())
+        while True:
+            self.assertTrue(np.sum(env.action_masks()) == env.H-i)
+            o, r, d, _, info = env.step(i)
+            self.assertTrue(env.observation_space.contains(o))
+            self.assertTrue((o[-env.H:] == env.action).all())
+            if info['excess_emission'] <= 0:
+                self.assertTrue(d)
+                # print(r)
+                # print(i)
+            if i >=env.H-1:
+                self.assertTrue(d)
+                self.assertTrue(np.sum(env.action_masks()) == 0)
+                break
+            i+=1
+            self.assertTrue(env.n_invalid_actions == i)
+            self.assertTrue(len(env.invalid_actions) == i)
 
 if __name__ == '__main__':
     unittest.main()

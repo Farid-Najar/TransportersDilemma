@@ -32,7 +32,7 @@ from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
 # from sb3_contrib.common.wrappers import ActionMasker
 from sb3_contrib.ppo_mask import MaskablePPO
 
-from assignment import CombActionEnv, RemoveActionEnv, AssignmentGame
+from assignment import CombActionEnv, RemoveActionEnv, AssignmentGame, NormalizedEnv
 import logging
 # logging.basicConfig(
 #     filename='RL.log',
@@ -58,8 +58,8 @@ import logging
 #         plt.close()
 #         return True
 
-def eval_model(model, vec_env:VecMonitor, n_eval = 10):
-    obs, _ = vec_env.reset()
+# def eval_model(model, vec_env:VecMonitor, n_eval = 10):
+#     obs, _ = vec_env.reset()
 
 
 def make_env(env, rank: int, seed: int = 0):
@@ -98,10 +98,13 @@ def train_RL(
     # Instantiate the agent
     if algo_file is not None:
         try:
-            model = algo.load(algo_dir+f'/{algo.__name__}', env=vec_env)
+            model = algo.load(algo_file+'/best_model', env=vec_env)
             assert model.policy_kwargs == policy_kwargs
         except Exception as e:
             logging.warning(f'couldnt load the model because this exception has been raised :\n{e}')
+            
+            print(f'path is {path}')
+            raise('couldnt load the model!')
     else:   
         model = algo(
             policy,
@@ -110,6 +113,8 @@ def train_RL(
             n_steps=n_steps,
             gamma=gamma,
             batch_size=n_steps*os.cpu_count(),
+            # n_epochs=50,
+            # learning_rate=5e-5,
             verbose=1,
             tensorboard_log=algo_dir+"/"
         )
@@ -143,7 +148,7 @@ def train_RL(
     )
     # Save the agent
     if save:
-        model.save(algo.__name__)
+        model.save(f'{str(path)}/{algo.__name__}')
     # del model  # delete trained model to demonstrate loading
     return model
 
@@ -166,8 +171,11 @@ def train_PPO(
     save_path = None,
     eval_freq = 200,
     progress_bar =True,
+    algo_file = str(path),
     n_steps = 128,
     gamma = 0.99,
+    *args,
+    **kwargs
 ):
     if save_path is None:
         save_path = str(path)+'/ppo'
@@ -210,6 +218,7 @@ def train_PPO(
         algo_dir=save_path,
         eval_freq =     eval_freq ,
         progress_bar =    progress_bar,
+        algo_file = algo_file,
         n_steps =     n_steps ,
         gamma = gamma,
     )
@@ -241,7 +250,7 @@ def train_PPO_mask(
     policy_kwargs = dict(
         activation_fn=nn.ReLU,
         share_features_extractor=True,
-        net_arch=[2048, 2048, 1024, 256, 128]#dict(
+        net_arch=[2048, 2048, 1024, 128]#dict(
         #    pi=[2048, 2048, 1024, 256],#, 128], 
         #    vf=[2048, 2048, 1024, 256])#, 128])
     ),
@@ -249,10 +258,13 @@ def train_PPO_mask(
     budget = int(2e4),
     save = True,
     save_path = None,
+    algo_file = str(path),
     eval_freq = 200,
     progress_bar =True,
     n_steps = 128,
     gamma = 0.99,
+    normalize = True,
+    **kwargs
 ):
     if save_path is None:
         save_path = str(path)+'/ppo_mask'
@@ -264,18 +276,22 @@ def train_PPO_mask(
     )
     logging.info('Train PPO maskable started !')
     # Create environment
-    env = RemoveActionEnv(**env_kwargs)#rewards_mode = 'terminal')
+    if normalize:
+        env = NormalizedEnv(RemoveActionEnv(**env_kwargs))#rewards_mode = 'terminal')
+        logging.info(
+            f"""
+            Environment information :
+
+            Grid size = {env.env._env._game.grid_size}
+            Q = {env.env._env._game.Q}
+            K = {env.env._env._game.num_packages}
+            n_vehicles = {env.env._env._game.num_vehicles}
+            """
+        )
+    else:
+        env = RemoveActionEnv(**env_kwargs)
     # check_env(env)
-    logging.info(
-        f"""
-        Environment information :
-        
-        Grid size = {env._env._game.grid_size}
-        Q = {env._env._game.Q}
-        K = {env._env._game.num_packages}
-        n_vehicles = {env._env._game.num_vehicles}
-        """
-    )
+    
     num_cpu = os.cpu_count()
     logging.info(f'Number of CPUs = {num_cpu}')
     vec_env = SubprocVecEnv([make_env(env, i) for i in range(num_cpu)])
@@ -292,6 +308,7 @@ def train_PPO_mask(
         n_eval=n_eval,
         save = save,
         algo_dir=save_path,
+        algo_file = algo_file,
         eval_freq =     eval_freq ,
         progress_bar =    progress_bar,
         n_steps =     n_steps ,
@@ -310,7 +327,9 @@ if __name__ == '__main__':
                         help='Selects the RL algorithm')
     parser.add_argument('--r_mode', default="normalized_terminal", choices=['heuristic', 'terminal', 'normalized_terminal', 'penalize_length'],
                         help='Selects the reward function')
-    parser.add_argument('--n_steps', type=int, default=128,
+    parser.add_argument('--obs_mode', default="routes", choices=['routes', 'action'],
+                        help='Selects the observation of the agent.')
+    parser.add_argument('--n_steps', type=int, default=256,
                        help='the number of steps done on an environment before updating the model')
     
     # parser.add_argument('--batch_size', type=int, default=2048,
@@ -325,6 +344,8 @@ if __name__ == '__main__':
                        help='the verbosity')
     parser.add_argument('--save', type=bool, default=True,
                        help='save the model')
+    parser.add_argument('--load', type=bool, default=False,
+                       help='load the model')
     parser.add_argument('--eval_freq', type=int, default=200,
                        help='the number of steps before an evaluation')
     parser.add_argument('--progress_bar', type=bool, default=False,
@@ -338,8 +359,12 @@ if __name__ == '__main__':
                        help='the number of deliveries')
     parser.add_argument('--C', type=int, default=15,
                        help='the capacity of each vehicle')
-    parser.add_argument('--load_game', type=bool, default=False,
+    parser.add_argument('--load_game', type=bool, default=True,
                        help='if the game is saved already')
+    parser.add_argument('--instance_id', type=int, default=0,
+                       help='The id of the saved instance')
+    parser.add_argument('--change_instance', type=bool, default=False,
+                       help='if the model should try to solve other instances')
     
     
     args = parser.parse_args()
@@ -353,22 +378,29 @@ if __name__ == '__main__':
     # ),
     # budget=budget, n_eval=25, save = True, save_path=save_dir
     # )
+    comment = ''
+    if not args.change_instance:
+        comment += f'_instanceID{str(args.instance_id)}'
     if args.algo == 'ppo':
         train_algo = train_PPO
-        save_dir = str(path)+f'/ppo/rewardMode({args.r_mode})_steps({args.steps})'
+        save_dir = str(path)+f'/ppo/rewardMode({args.r_mode})_steps({args.steps})'+comment
     else:
         train_algo = train_PPO_mask
-        save_dir = str(path)+f'/ppo_mask/rewardMode({args.r_mode})_steps({args.steps})'
+        save_dir = str(path)+f'/ppo_mask/rewardMode({args.r_mode})_steps({args.steps})'+comment
     os.makedirs(save_dir, exist_ok=True)
     
 
     try:
         if args.load_game:
-            with open(save_dir+'/game.pkl', 'rb') as f:
+            with open(f'TransportersDilemma/RL/game_K{args.K}.pkl', 'rb') as f:
                 g = pickle.load(f)
+            routes = np.load(f'TransportersDilemma/RL/routes_K{args.K}.npy')
+            dests = np.load(f'TransportersDilemma/RL/destinations_K{args.K}.npy')
         else:
             assert False
-    except Exception:
+    except Exception as e:
+        print(e)
+        raise('couldnt load')
         g = AssignmentGame(
             grid_size=15,
             max_capacity=args.C,
@@ -377,17 +409,38 @@ if __name__ == '__main__':
         )
         with open(save_dir+'/game.pkl', 'wb') as f:
                 pickle.dump(g, f, -1)
+        routes = None,
+        dests = None,
         
-    
+    if args.load:
+        algo_file = str(path)
+    else:
+        algo_file = None
         
     train_algo(
         env_kwargs = dict(
             game = g,
             rewards_mode = args.r_mode, # possible values ['heuristic', 'terminal', 'normalized_terminal', 'penalize_length']
+            action_mode ='all_nodes',
+            saved_routes = routes,
+            saved_dests = dests,
+            obs_mode = args.obs_mode,
+            change_instance = args.change_instance,
+            instance_id = args.instance_id,
+        ),
+        policy_kwargs = dict(
+            activation_fn=nn.ReLU,
+            share_features_extractor=True,
+            net_arch=#[1024, 1024, 256, 128]
+            # [2048, 2048, 1024, 256]#, 128]#dict(
+            [2048, 2048, 1024, 512]#, 128]#dict(
+            #    pi=[2048, 2048, 1024, 256],#, 128], 
+            #    vf=[2048, 2048, 1024, 256])#, 128])
         ),
         budget=args.steps, n_eval=args.n_eval, save = args.save, save_path=save_dir,
         eval_freq = args.eval_freq, progress_bar =args.progress_bar, n_steps = args.n_steps,
-        gamma = args.gamma,
+        gamma = args.gamma, algo_file = algo_file,
+        normalize=False if args.obs_mode == 'action' else True
     )
     
     # r_mode = 'heuristic'
@@ -398,3 +451,5 @@ if __name__ == '__main__':
     #     ),
     #     budget=30_000, n_eval=25, save = True, save_path=save_dir
     # )
+    
+    # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 500000 --change_instance True

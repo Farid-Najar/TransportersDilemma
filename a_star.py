@@ -1,11 +1,11 @@
 import py_compile
 
-try:
-    py_compile.compile("TransportersDilemma/assignment.py")
-except Exception as e:
-    py_compile.compile("assignment.py")
+# try:
+#     py_compile.compile("TransportersDilemma/assignment.py")
+# except Exception as e:
+#     py_compile.compile("assignment.py")
 
-from assignment import AssignmentGame
+from assignment import AssignmentEnv
 import numpy as np
 from copy import deepcopy
 import multiprocess as mp
@@ -13,20 +13,21 @@ from time import time
 import pickle
 
 def A_Star(
-    game : AssignmentGame,
+    game : AssignmentEnv,
     time_budget = 1,
-    max_time = 60,
+    max_time = None,
     # depth = 2,
     ):
     
+    num_packages = game._game.num_packages
     t0 = time()
     key = lambda l : ''.join([str(x) for x in l])
     key_to_np = lambda k : np.array(list(k), dtype=int)
-    action = np.ones(game.num_packages, dtype=int)
-    r_best, d, info = game.step(action, time_budget, call_OR=True)
+    action = np.ones(num_packages, dtype=int)
+    _, r_best, d, _, info = game.step(action)#, time_budget, call_OR=True)
     
-    rewards = np.zeros(game.num_packages)
-    excess_emission = np.zeros(game.num_packages)
+    rewards = np.zeros(num_packages)
+    excess_emission = np.zeros(num_packages)
     infos = []#[dict() for _ in range(len(action))]
     
     open_nodes = {key(action)}
@@ -39,6 +40,7 @@ def A_Star(
     f[key(action)] = -r_best
     # pivots[key(action)] = 0
     t = 0
+    k=0
     # r, done, _ = game.step(action, call_OR=False)
     
     while len(open_nodes) > 0:
@@ -48,12 +50,13 @@ def A_Star(
         
         current = min(f, key=f.get)
         
-        if done[current]:
-            break
-        
+        if max_time is None:
+            if done[current]:
+                break
+        else:
+            if time() - t0 > max_time:
+                break
         action = key_to_np(current)
-        if time() - t0 > max_time:
-            break
         # pivot = pivots[current]
         # indices = np.where(action[pivot:] == 1)[0]
         indices = np.where(action == 1)[0]
@@ -64,12 +67,13 @@ def A_Star(
             a[i] = 0
             neighbor = key(a)
             # g[neighbor] = g[current] + 1
-            r, d, inf = game.step(a, call_OR=False)
+            _, r, d, _, inf = game.step(a)#, call_OR=False)
             f[neighbor] = - r
             done[neighbor] = d
             # pivots[neighbor] = i
             
             open_nodes.add(neighbor)
+            k+=1
             
             if r>r_best:
                 r_best = r
@@ -94,10 +98,11 @@ def A_Star(
     
     
     # print(r_best)
-    
+    # current = min(f, key=f.get)
+    print(f'A* evaluated {k} different assignments')
     
     res = {
-        'solution' : action,
+        'solution' : key_to_np(current),
         'rewards' : rewards,
         'excess_emission' : excess_emission,
         'infos' : infos,
@@ -143,7 +148,7 @@ def simulate(
     ps = []
 
     for i in range(n_simulation):
-        game = AssignmentGame(
+        game = AssignmentEnv(
             Q=Q,
             grid_size=max(12, int(np.sqrt(K))+2),
             max_capacity=K//4+1

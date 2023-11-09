@@ -1,6 +1,6 @@
 from typing import Dict, List
 import numpy as np
-from assignment import AssignmentGame
+from assignment import AssignmentEnv
 
 #import itertools as it
 import multiprocess as mp
@@ -8,7 +8,7 @@ from numpy import random as rd
 from numpy import exp
 from copy import deepcopy
 
-def recuit(game : AssignmentGame, T_init, T_limit, lamb = .99, var = False, id = 0, log = False, H = 500) :
+def recuit(game : AssignmentEnv, T_init, T_limit, lamb = .99, var = False, id = 0, log = False, H = 500) :
     """
     This function finds a solution for the steiner problem
         using annealing algorithm
@@ -17,10 +17,12 @@ def recuit(game : AssignmentGame, T_init, T_limit, lamb = .99, var = False, id =
     :param T_limit: the lowest temperature allowed
     :return: the solution found and the evolution of the best evaluations
     """
-    best = np.ones(game.num_packages, dtype=int)
+    num_packages = game._game.num_packages
+    
+    best = np.ones(num_packages, dtype=int)
     solution = best.copy()
     T = T_init
-    r, _, info = game.step(best, time_budget=5)
+    _, r, d, _, info = game.step(best)
     eval_best = -r
     eval_solution = eval_best
     m = 0
@@ -44,7 +46,8 @@ def recuit(game : AssignmentGame, T_init, T_limit, lamb = .99, var = False, id =
             print('cost : ', eval_sol)
             print('best cost : ', eval_best)
         if eval_sol < eval_best :
-            best = sol.copy()
+            if info['done']:
+                best = sol.copy()
             eval_best = eval_sol
             infos.append(info)
             
@@ -72,7 +75,7 @@ def recuit(game : AssignmentGame, T_init, T_limit, lamb = .99, var = False, id =
     return best, list_best_costs, infos
 
 
-def recuit_multiple(game : AssignmentGame, T_init, T_limit = 2, nb_researchers = 2, lamb = .99, log = False, H=500):
+def recuit_multiple(game : AssignmentEnv, T_init, T_limit = 2, nb_researchers = 2, lamb = .99, log = False, H=500):
     """
     This function finds a solution for the steiner problem
         using annealing algorithm with multiple researchers
@@ -112,7 +115,7 @@ def recuit_multiple(game : AssignmentGame, T_init, T_limit = 2, nb_researchers =
     return res
 
 
-def eval_annealing(sol, game : AssignmentGame, malus = 500):
+def eval_annealing(sol, game : AssignmentEnv, malus = 500):
     """
     This evaluates the solution of the algorithm.
     :param sol: the solution which is list of booleans
@@ -121,7 +124,8 @@ def eval_annealing(sol, game : AssignmentGame, malus = 500):
     :param malus: the coefficient that we use to penalize bad solutions
     :return: the evaluation of the solution that is an integer
     """
-    r, _, info = game.step(sol, call_OR=False)
+    _, r, d, _, info = game.step(sol)
+    info['done'] = d
     # with open('log.txt', 'w+') as f:
     #     f.write(str(info))
     
@@ -145,7 +149,7 @@ if __name__ == '__main__' :
     games = []
     Q = 30
     K = 50
-    game = AssignmentGame(Q=Q, K=K)
+    game = AssignmentEnv(Q=Q, K=K)
     game.reset()
         # games.append(game)
     
