@@ -329,6 +329,9 @@ if __name__ == '__main__':
                         help='Selects the reward function')
     parser.add_argument('--obs_mode', default="routes", choices=['routes', 'action'],
                         help='Selects the observation of the agent.')
+    parser.add_argument('--action_mode', default="all_nodes", choices=['destinations', 'all_nodes'],
+                        help='Selects the actions of the agent.')
+    
     parser.add_argument('--n_steps', type=int, default=256,
                        help='the number of steps done on an environment before updating the model')
     
@@ -421,7 +424,7 @@ if __name__ == '__main__':
         env_kwargs = dict(
             game = g,
             rewards_mode = args.r_mode, # possible values ['heuristic', 'terminal', 'normalized_terminal', 'penalize_length']
-            action_mode ='all_nodes',
+            action_mode = args.action_mode,
             saved_routes = routes,
             saved_dests = dests,
             obs_mode = args.obs_mode,
@@ -429,11 +432,11 @@ if __name__ == '__main__':
             instance_id = args.instance_id,
         ),
         policy_kwargs = dict(
-            activation_fn=nn.ReLU,
+            activation_fn=nn.ReLU,#LeakyReLU,
             share_features_extractor=True,
-            net_arch=#[1024, 1024, 256, 128]
-            # [2048, 2048, 1024, 256]#, 128]#dict(
+            net_arch= [1024, 1024, 256, 128] if args.obs_mode == 'action' and args.action_mode == 'destinations' else
             [2048, 2048, 1024, 512]#, 128]#dict(
+            # [2048, 2048, 1024, 256]#, 128]#dict(
             #    pi=[2048, 2048, 1024, 256],#, 128], 
             #    vf=[2048, 2048, 1024, 256])#, 128])
         ),
@@ -453,3 +456,4 @@ if __name__ == '__main__':
     # )
     
     # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 500000 --change_instance True
+    # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 100000  --obs_mode action --K 100

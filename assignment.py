@@ -536,7 +536,6 @@ class AssignmentEnv(gym.Env):
                  obs_mode = 'routes',
                  change_instance = True,
                  instance_id = 0,
-                 shuffle = True
                  ):
         
         super().__init__()
@@ -564,7 +563,7 @@ class AssignmentEnv(gym.Env):
             assert saved_dests is not None
             assert len(saved_routes) == len(saved_dests)
             self.order = np.arange(len(saved_dests), dtype=int)
-            if shuffle:
+            if change_instance:
                 np.random.shuffle(self.order)
             
         self.change_instance = change_instance
