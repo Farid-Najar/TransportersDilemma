@@ -4,7 +4,7 @@ import networkx as nx
 import numpy as np
 from numba import njit
 from numba.typed import List
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, normalize
 from sklearn import preprocessing
 
 from transporter import Transporter
@@ -394,7 +394,9 @@ class AssignmentGame:
             
         # super().reset(seed=seed)
         if packages is None:
-            destinations = np.random.choice([i for i,_ in enumerate(self.G.nodes) if i!=self.hub], size=self.num_packages, replace=False)
+            destinations = np.sort(np.random.choice(
+                [i for i,_ in enumerate(self.G.nodes) if i!=self.hub], size=self.num_packages, replace=False
+            ))
 
             self.packages = [
                 Package(
@@ -547,7 +549,7 @@ class AssignmentEnv(gym.Env):
         
         if obs_mode == 'distance_matrix':
             d = len(self._game.distance_matrix)
-            self.obs_dim = d**2 + 3*self._game.num_packages +1
+            self.obs_dim = (d, d)
             
         elif obs_mode == 'routes':
             self.obs_dim = ((2*(self._game.max_capacity+2)-1)*self._game.num_vehicles) + 2*self._game.num_packages +1
@@ -577,8 +579,10 @@ class AssignmentEnv(gym.Env):
         
         if obs_mode == 'action':
             self.observation_space = gym.spaces.MultiBinary(self._game.num_packages)
-            
-        self.observation_space = gym.spaces.Box(0, 1e10, (self.obs_dim,), np.float64) #TODO Give better upper bound
+        elif obs_mode == 'distance_matrix':
+            self.observation_space = gym.spaces.Box(0, 1, (1, d, d,), np.float64)
+        else:
+            self.observation_space = gym.spaces.Box(0, 1e10, (self.obs_dim,), np.float64)
         self.action_space = gym.spaces.MultiBinary(self._game.num_packages)
         
     def reset(self, 
@@ -610,6 +614,7 @@ class AssignmentEnv(gym.Env):
                 # np.save(name + '_dests', np.array(self.new_dests))
                 
             self.destinations = np.array(self.saved_dests[self.order[self.reset_counter]], dtype=int)
+            # self.destinations.sort()
             packages = [
                 Package(
                     destination=d,
@@ -700,15 +705,20 @@ class AssignmentEnv(gym.Env):
             self.reset_counter += 1
             
         if self.obs_mode == 'distance_matrix':
-            self.observation = np.reshape(np.concatenate([
-                self._game.distance_matrix.reshape(-1),
-                np.sort(self.destinations), #destinations for each package
-                self.quantities, #quantites for each package
-                [
-                  info['excess_emission']
-                ], #complemantary informations
-                a, # actions
-            ]), (-1))
+            M = np.zeros(self.observation_space.shape)
+            for m in range(len(self.initial_routes)):
+                l = []
+                ll = []
+                for i in range(0, len(self.initial_routes[m]), 2):
+                    # d.add(env.initial_routes[l, 2*i])
+                    if self.initial_routes[m, i]:
+                        l.append(int(self.destinations[int(self.initial_routes[m, i])-1]))
+                        ll.append(int(self.initial_routes[m, i])-1)
+                # print(M[np.array(l)])
+                M[0][np.ix_(l, l)] = self.costs_matrix[m][np.ix_(ll, ll)]
+            # M[self.mask] = self.distance_matrix
+            M[0] = normalize(M[0])
+            self.observation = M#np.array(M*255, dtype=np.uint8)
         
         if self.obs_mode == 'routes':#TODO finish the work
             self.observation = np.reshape(np.concatenate([
@@ -723,8 +733,9 @@ class AssignmentEnv(gym.Env):
             
         if self.obs_mode == 'action':
             self.observation = a
-            
-        assert self.observation.size == self.obs_dim
+        
+        # if self.obs_mode != 'distance_matrix':
+        assert self.observation.shape == self.observation_space.shape
         
         # print(self.obs_dim)
         # print(self.observation.shape)
@@ -753,7 +764,8 @@ class AssignmentEnv(gym.Env):
             self._game.num_vehicles,
         )
         
-        self.observation[-len(action):] = action
+        if self.obs_mode != 'distance_matrix':
+            self.observation[-len(action):] = action
         if self.obs_mode == 'routes':
             self.observation[:routes.size] = routes.reshape(-1)
             
@@ -769,7 +781,7 @@ class AssignmentEnv(gym.Env):
         info['excess_emission'] = total_emissions - self._game.Q
         info['omitted'] = omitted
         # info['solution'] = self.solutions if sol is None else sol
-        if self.obs_mode != 'action':
+        if self.obs_mode != 'action' and self.obs_mode != 'distance_matrix':
             self.observation[-len(action)-1] = info['excess_emission']
         
         r = -(total_costs + max(0, total_emissions - self._game.Q)*self._game.CO2_penalty + omission_penalty)
@@ -850,9 +862,17 @@ class RemoveActionEnv(gym.Env):
         if action_mode == 'all_nodes':
             self.action_mask = np.zeros(self._env._game.grid_size**2, dtype=bool)
             self.action_space = gym.spaces.Discrete(len(self.action_mask))
-            self.observation_space = gym.spaces.MultiBinary(len(self.action_mask))
+            if self._env.obs_mode == 'distance_matrix':
+                self.observation_space = self._env.observation_space
+            else:
+                self.observation_space = gym.spaces.MultiBinary(len(self.action_mask))
+                
         else:
-            self.observation_space = self._env.observation_space
+            if self._env.obs_mode == 'distance_matrix':
+                d = self._env._game.num_packages + 1
+                self.observation_space = gym.spaces.Box(0, 1, (1, d, d,), np.float64)
+            else:
+                self.observation_space = self._env.observation_space
             self.action_space = gym.spaces.Discrete(self._env._game.num_packages)
         self.invalid_actions = []
         self.n_invalid_actions = 0
@@ -877,12 +897,17 @@ class RemoveActionEnv(gym.Env):
               ) -> tuple[np.ndarray, dict[str, Any]]:
         
         obs, info = self._env.reset(*args, **kwargs)
+        self.obs = obs.copy()
+        if self.action_mode == 'destinations' and self._env.obs_mode == 'distance_matrix':
+            self.obs = self.obs[0][self._env.mask].reshape(self.observation_space.shape)
+            obs = self.obs
         
+        self.destinations = np.array(self._env.destinations, dtype=np.int16)
         if self.action_mode == 'all_nodes':
-            self.destinations = np.array(self._env.destinations, dtype=np.int16)
             self.action_mask = np.zeros(self._env._game.grid_size**2, dtype=bool)
             self.action_mask[self.destinations] = True
-            obs = self.action_mask.astype(int)
+            if self._env.obs_mode != 'distance_matrix':
+                obs = self.action_mask.astype(int)
             
         self.action = np.ones(self._env._game.num_packages, dtype=int)
         self.t = 0
@@ -893,6 +918,16 @@ class RemoveActionEnv(gym.Env):
     
     def step(self, a: int) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         
+        if self._env.obs_mode == 'distance_matrix':
+            self.obs[0, a, :] = 0
+            self.obs[0, :, a] = 0
+            # ii = np.array(a).reshape(-1)
+            # self.obs[0][np.ix_(ii, ii)] = 0
+            # print(a)
+            # print(self.obs[0][np.ix_(ii, ii)])
+            # print(20*'-')
+            # del ii
+
         if self.action_mode == 'all_nodes':
             self.action_mask[a] = False
             a = (self.destinations[:, None] == a).argmax(axis=0)
@@ -902,7 +937,9 @@ class RemoveActionEnv(gym.Env):
         self.t += 1
         obs, r, d, _, info = self._env.step(self.action)
         
-        if self.action_mode == 'all_nodes':
+        if self._env.obs_mode == 'distance_matrix':
+            obs = self.obs
+        elif self.action_mode == 'all_nodes':
             obs = self.action_mask.astype(int)
             
         done = d or bool(self.t > (self.H-1))

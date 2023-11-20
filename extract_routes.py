@@ -76,4 +76,4 @@ if __name__ == '__main__':
             K=100
         )
     env = AssignmentEnv(g)
-    create_routes(env, 2_000, retain_rate=0.)
+    create_routes(env, 2_500, retain_rate=0.)

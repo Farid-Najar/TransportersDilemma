@@ -23,8 +23,12 @@ from stable_baselines3.common.utils import set_random_seed
 # from stable_baselines3.common.logger import Figure
 # from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+
 # from stable_baselines3.common.monitor import Monitor
 import torch.nn as nn
+import torch as th
+from gymnasium import spaces
 
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 from sb3_contrib.common.maskable.evaluation import evaluate_policy as evaluate_maskable
@@ -254,6 +258,7 @@ def train_PPO_mask(
         #    pi=[2048, 2048, 1024, 256],#, 128], 
         #    vf=[2048, 2048, 1024, 256])#, 128])
     ),
+    policy=MaskableActorCriticPolicy,
     n_eval = 100,
     budget = int(2e4),
     save = True,
@@ -301,7 +306,7 @@ def train_PPO_mask(
     model = train_RL(
         vec_env,
         algo=MaskablePPO,
-        policy=MaskableActorCriticPolicy,
+        policy=policy,
         policy_kwargs=policy_kwargs,
         callbackClass=MaskableEvalCallback,
         budget=budget,
@@ -319,6 +324,42 @@ def train_PPO_mask(
     logging.info(f'After training :\n mean, std = {mean_reward}, {std_reward}')
     # Create environment
 
+class CustomCNN(BaseFeaturesExtractor):
+    """
+    :param observation_space: (gym.Space)
+    :param features_dim: (int) Number of features extracted.
+        This corresponds to the number of unit for the last layer.
+    """
+
+    def __init__(self, observation_space: spaces.Box, features_dim: int = 256):
+        super().__init__(observation_space, features_dim)
+        # We assume CxHxW images (channels first)
+        # Re-ordering will be done by pre-preprocessing or wrapper
+        n_input_channels = observation_space.shape[0]
+        self.cnn = nn.Sequential(
+            nn.Conv2d(n_input_channels, 4, kernel_size=8, stride=4, padding=0),
+            nn.ReLU(),
+            # nn.MaxPool2d(15, 2),
+            nn.Conv2d(4, 8, kernel_size=4, stride=2, padding=0),
+            nn.ReLU(),
+            nn.Flatten(),
+        )
+
+        # Compute shape by doing one forward pass
+        with th.no_grad():
+            n_flatten = self.cnn(
+                th.as_tensor(observation_space.sample()[None]).float()
+            ).shape[1]
+
+        self.linear = nn.Sequential(
+            # nn.Linear(n_flatten, 512), 
+            # nn.ReLU(),
+            nn.Linear(n_flatten, features_dim), 
+            nn.ReLU()
+        )
+
+    def forward(self, observations: th.Tensor) -> th.Tensor:
+        return self.linear(self.cnn(observations))
     
 if __name__ == '__main__':
     
@@ -327,7 +368,7 @@ if __name__ == '__main__':
                         help='Selects the RL algorithm')
     parser.add_argument('--r_mode', default="normalized_terminal", choices=['heuristic', 'terminal', 'normalized_terminal', 'penalize_length'],
                         help='Selects the reward function')
-    parser.add_argument('--obs_mode', default="routes", choices=['routes', 'action'],
+    parser.add_argument('--obs_mode', default="routes", choices=['distance_matrix','routes', 'action'],
                         help='Selects the observation of the agent.')
     parser.add_argument('--action_mode', default="all_nodes", choices=['destinations', 'all_nodes'],
                         help='Selects the actions of the agent.')
@@ -349,7 +390,7 @@ if __name__ == '__main__':
                        help='save the model')
     parser.add_argument('--load', type=bool, default=False,
                        help='load the model')
-    parser.add_argument('--eval_freq', type=int, default=200,
+    parser.add_argument('--eval_freq', type=int, default=500,
                        help='the number of steps before an evaluation')
     parser.add_argument('--progress_bar', type=bool, default=False,
                        help='the progress bar appearance')
@@ -382,6 +423,7 @@ if __name__ == '__main__':
     # budget=budget, n_eval=25, save = True, save_path=save_dir
     # )
     comment = ''
+    if args.change_instance: assert False
     if not args.change_instance:
         comment += f'_instanceID{str(args.instance_id)}'
     if args.algo == 'ppo':
@@ -389,7 +431,7 @@ if __name__ == '__main__':
         save_dir = str(path)+f'/ppo/rewardMode({args.r_mode})_steps({args.steps})'+comment
     else:
         train_algo = train_PPO_mask
-        save_dir = str(path)+f'/ppo_mask/rewardMode({args.r_mode})_steps({args.steps})'+comment
+        save_dir = str(path)+f'/ppo_mask/rewardMode({args.r_mode})_obsMode({args.obs_mode})_steps({args.steps})'+comment
     os.makedirs(save_dir, exist_ok=True)
     
 
@@ -420,6 +462,24 @@ if __name__ == '__main__':
     else:
         algo_file = None
         
+    if args.obs_mode == 'distance_matrix':
+        policy = 'CnnPolicy'
+        p_kwargs = dict(
+            # normalize
+            features_extractor_class=CustomCNN,
+            features_extractor_kwargs=dict(features_dim=128),
+        )
+    else:
+        policy = MaskableActorCriticPolicy
+        p_kwargs = dict(
+            activation_fn=nn.ReLU,#LeakyReLU,
+            share_features_extractor=True,
+            net_arch= [1024, 1024, 256, 128] if args.obs_mode == 'action' and args.action_mode == 'destinations' else
+            [2048, 2048, 1024, 512]#, 128]#dict(
+            # [2048, 2048, 1024, 256]#, 128]#dict(
+            #    pi=[2048, 2048, 1024, 256],#, 128], 
+            #    vf=[2048, 2048, 1024, 256])#, 128])
+        )
     train_algo(
         env_kwargs = dict(
             game = g,
@@ -431,19 +491,12 @@ if __name__ == '__main__':
             change_instance = args.change_instance,
             instance_id = args.instance_id,
         ),
-        policy_kwargs = dict(
-            activation_fn=nn.ReLU,#LeakyReLU,
-            share_features_extractor=True,
-            net_arch= [1024, 1024, 256, 128] if args.obs_mode == 'action' and args.action_mode == 'destinations' else
-            [2048, 2048, 1024, 512]#, 128]#dict(
-            # [2048, 2048, 1024, 256]#, 128]#dict(
-            #    pi=[2048, 2048, 1024, 256],#, 128], 
-            #    vf=[2048, 2048, 1024, 256])#, 128])
-        ),
+        policy_kwargs = p_kwargs,
+        policy=policy,
         budget=args.steps, n_eval=args.n_eval, save = args.save, save_path=save_dir,
         eval_freq = args.eval_freq, progress_bar =args.progress_bar, n_steps = args.n_steps,
         gamma = args.gamma, algo_file = algo_file,
-        normalize=False if args.obs_mode == 'action' else True
+        normalize= not (args.obs_mode == 'action' or args.obs_mode == 'distance_matrix')
     )
     
     # r_mode = 'heuristic'
@@ -457,3 +510,4 @@ if __name__ == '__main__':
     
     # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 500000 --change_instance True
     # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 100000  --obs_mode action --K 100
+    # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 100000 --K 100 --action_mode destinations
