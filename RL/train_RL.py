@@ -28,6 +28,10 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 # from stable_baselines3.common.monitor import Monitor
 import torch.nn as nn
 import torch as th
+from torch.nn import Linear
+import torch.nn.functional as F
+from torch_geometric.nn import GCNConv
+from torch_geometric.nn import global_mean_pool
 from gymnasium import spaces
 
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
@@ -361,6 +365,32 @@ class CustomCNN(BaseFeaturesExtractor):
     def forward(self, observations: th.Tensor) -> th.Tensor:
         return self.linear(self.cnn(observations))
     
+class GCN(th.nn.Module):
+    def __init__(self, observation_space: spaces, hidden_channels):
+        super(GCN, self).__init__()
+        th.manual_seed(12345)
+        self.conv1 = GCNConv(observation_space.num_features, hidden_channels)
+        self.conv2 = GCNConv(hidden_channels, hidden_channels)
+        self.conv3 = GCNConv(hidden_channels, hidden_channels)
+        self.lin = Linear(hidden_channels, 100)
+
+    def forward(self, x, edge_index, batch):
+        # 1. Obtain node embeddings 
+        x = self.conv1(x, edge_index)
+        x = x.relu()
+        x = self.conv2(x, edge_index)
+        x = x.relu()
+        x = self.conv3(x, edge_index)
+
+        # 2. Readout layer
+        x = global_mean_pool(x, batch)  # [batch_size, hidden_channels]
+
+        # 3. Apply a final classifier
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = self.lin(x)
+        
+        return x
+    
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
@@ -368,7 +398,7 @@ if __name__ == '__main__':
                         help='Selects the RL algorithm')
     parser.add_argument('--r_mode', default="normalized_terminal", choices=['heuristic', 'terminal', 'normalized_terminal', 'penalize_length'],
                         help='Selects the reward function')
-    parser.add_argument('--obs_mode', default="routes", choices=['distance_matrix','routes', 'action'],
+    parser.add_argument('--obs_mode', default="routes", choices=['distance_matrix','routes', 'action', 'elimination_gain'],
                         help='Selects the observation of the agent.')
     parser.add_argument('--action_mode', default="all_nodes", choices=['destinations', 'all_nodes'],
                         help='Selects the actions of the agent.')
@@ -397,6 +427,9 @@ if __name__ == '__main__':
     parser.add_argument('--gamma', type=float, default=0.99,
                        help='the discount factor gamma')
     
+    parser.add_argument('--retain_rate', type=float, default=0.,
+                       help='the discount factor gamma')
+    
     parser.add_argument('--Q', type=float, default=30,
                        help='the emission quota')
     parser.add_argument('--K', type=int, default=50,
@@ -423,7 +456,7 @@ if __name__ == '__main__':
     # budget=budget, n_eval=25, save = True, save_path=save_dir
     # )
     comment = ''
-    if args.change_instance: assert False
+    # if args.change_instance: assert False
     if not args.change_instance:
         comment += f'_instanceID{str(args.instance_id)}'
     if args.algo == 'ppo':
@@ -437,10 +470,16 @@ if __name__ == '__main__':
 
     try:
         if args.load_game:
-            with open(f'TransportersDilemma/RL/game_K{args.K}.pkl', 'rb') as f:
-                g = pickle.load(f)
-            routes = np.load(f'TransportersDilemma/RL/routes_K{args.K}.npy')
-            dests = np.load(f'TransportersDilemma/RL/destinations_K{args.K}.npy')
+            if args.retain_rate == 0:
+                with open(f'TransportersDilemma/RL/game_K{args.K}.pkl', 'rb') as f:
+                    g = pickle.load(f)
+                routes = np.load(f'TransportersDilemma/RL/routes_K{args.K}.npy')
+                dests = np.load(f'TransportersDilemma/RL/destinations_K{args.K}.npy')
+            else:
+                with open(f'TransportersDilemma/RL/game_K{args.K}_retain{args.retain_rate}.pkl', 'rb') as f:
+                    g = pickle.load(f)
+                routes = np.load(f'TransportersDilemma/RL/routes_K{args.K}_retain{args.retain_rate}.npy')
+                dests = np.load(f'TransportersDilemma/RL/destinations_K{args.K}_retain{args.retain_rate}.npy')
         else:
             assert False
     except Exception as e:
@@ -474,7 +513,9 @@ if __name__ == '__main__':
         p_kwargs = dict(
             activation_fn=nn.ReLU,#LeakyReLU,
             share_features_extractor=True,
-            net_arch= [1024, 1024, 256, 128] if args.obs_mode == 'action' and args.action_mode == 'destinations' else
+            net_arch= [1024, 1024, 256, 128] if (
+                args.obs_mode == 'action' and args.action_mode == 'destinations'
+                ) else#or args.obs_mode == 'elimination_gain' else
             [2048, 2048, 1024, 512]#, 128]#dict(
             # [2048, 2048, 1024, 256]#, 128]#dict(
             #    pi=[2048, 2048, 1024, 256],#, 128], 
@@ -496,7 +537,7 @@ if __name__ == '__main__':
         budget=args.steps, n_eval=args.n_eval, save = args.save, save_path=save_dir,
         eval_freq = args.eval_freq, progress_bar =args.progress_bar, n_steps = args.n_steps,
         gamma = args.gamma, algo_file = algo_file,
-        normalize= not (args.obs_mode == 'action' or args.obs_mode == 'distance_matrix')
+        normalize= (args.obs_mode == 'routes')
     )
     
     # r_mode = 'heuristic'

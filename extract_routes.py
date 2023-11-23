@@ -33,7 +33,7 @@ def create_routes(env : AssignmentEnv, nb_routes = 5_000, retain_rate = 0.75):
         q.put((id, res))
         print(f'{id} done')
     
-    with open(f'./game_K{env._game.num_packages}.pkl', 'wb') as f:
+    with open(f'./game_K{env._game.num_packages}_retain{retain_rate}.pkl', 'wb') as f:
         pickle.dump(env._game, f, -1)
     
     q = mp.Manager().Queue()
@@ -65,8 +65,8 @@ def create_routes(env : AssignmentEnv, nb_routes = 5_000, retain_rate = 0.75):
         destinations[i] = d['d']
         
     
-    np.save(f'routes_K{env._game.num_packages}', routes) 
-    np.save(f'destinations_K{env._game.num_packages}', destinations) 
+    np.save(f'routes_K{env._game.num_packages}_retain{retain_rate}', routes) 
+    np.save(f'destinations_K{env._game.num_packages}_retain{retain_rate}', destinations) 
     
 if __name__ == '__main__':
     g = AssignmentGame(
@@ -76,4 +76,4 @@ if __name__ == '__main__':
             K=100
         )
     env = AssignmentEnv(g)
-    create_routes(env, 2_500, retain_rate=0.)
+    create_routes(env, 2_500, retain_rate=0.8)

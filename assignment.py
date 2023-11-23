@@ -407,7 +407,7 @@ class AssignmentGame:
             ]
         else:
             assert len(packages) == self.num_packages
-            self.packages = packages
+            self.packages = sorted(packages, key=lambda p : p.destination)
             assert self.total_capacity >= np.sum([
                 p.quantity
                 for p in packages
@@ -535,7 +535,7 @@ class AssignmentEnv(gym.Env):
                  game : AssignmentGame = None, 
                  saved_routes = None,
                  saved_dests = None,
-                 obs_mode = 'routes',
+                 obs_mode = 'routes', # possible values ['distance_matrix','routes', 'action', 'elimination_gain']
                  change_instance = True,
                  instance_id = 0,
                  ):
@@ -554,7 +554,7 @@ class AssignmentEnv(gym.Env):
         elif obs_mode == 'routes':
             self.obs_dim = ((2*(self._game.max_capacity+2)-1)*self._game.num_vehicles) + 2*self._game.num_packages +1
             
-        elif obs_mode == 'action':
+        elif obs_mode == 'action' or obs_mode == 'elimination_gain':
             self.obs_dim = self._game.num_packages 
             
         else:
@@ -581,6 +581,8 @@ class AssignmentEnv(gym.Env):
             self.observation_space = gym.spaces.MultiBinary(self._game.num_packages)
         elif obs_mode == 'distance_matrix':
             self.observation_space = gym.spaces.Box(0, 1, (1, d, d,), np.float64)
+        elif obs_mode == 'elimination_gain':
+            self.observation_space = gym.spaces.Box(0, 1, (self.obs_dim,), np.float64)
         else:
             self.observation_space = gym.spaces.Box(0, 1e10, (self.obs_dim,), np.float64)
         self.action_space = gym.spaces.MultiBinary(self._game.num_packages)
@@ -733,6 +735,18 @@ class AssignmentEnv(gym.Env):
             
         if self.obs_mode == 'action':
             self.observation = a
+            
+        if self.obs_mode == 'elimination_gain':
+            self.observation = np.zeros(self.observation_space.shape)
+            for m in range(len(self.initial_routes)):
+                j = 0
+                while not (j > 0 and self.initial_routes[m, j] == 0):
+                    if self.initial_routes[m, j] != 0:
+                        self.observation[int(self.initial_routes[m, j])-1] = self.initial_routes[m, j-1] + self.initial_routes[m, j+1] -(
+                                self.costs_matrix[m, int(self.initial_routes[m, j-2]), int(self.initial_routes[m, j+2])]
+                        )
+                    j+=2
+            self.observation /= np.max(self.observation)
         
         # if self.obs_mode != 'distance_matrix':
         assert self.observation.shape == self.observation_space.shape
@@ -764,10 +778,13 @@ class AssignmentEnv(gym.Env):
             self._game.num_vehicles,
         )
         
-        if self.obs_mode != 'distance_matrix':
+        if self.obs_mode != 'distance_matrix' or self.obs_mode != 'elimination_gain':
             self.observation[-len(action):] = action
         if self.obs_mode == 'routes':
             self.observation[:routes.size] = routes.reshape(-1)
+            
+        # if self.obs_mode == 'elimination_gain':
+        #     self.observation[action == 0] = 0.
             
         # print(self.observation.shape)
             
@@ -781,7 +798,7 @@ class AssignmentEnv(gym.Env):
         info['excess_emission'] = total_emissions - self._game.Q
         info['omitted'] = omitted
         # info['solution'] = self.solutions if sol is None else sol
-        if self.obs_mode != 'action' and self.obs_mode != 'distance_matrix':
+        if self.obs_mode == 'routes':
             self.observation[-len(action)-1] = info['excess_emission']
         
         r = -(total_costs + max(0, total_emissions - self._game.Q)*self._game.CO2_penalty + omission_penalty)
@@ -927,6 +944,9 @@ class RemoveActionEnv(gym.Env):
             # print(self.obs[0][np.ix_(ii, ii)])
             # print(20*'-')
             # del ii
+        elif self._env.obs_mode == 'elimination_gain':
+            self.obs[a] = 0.
+            self._env.observation = self.obs
 
         if self.action_mode == 'all_nodes':
             self.action_mask[a] = False
@@ -937,10 +957,10 @@ class RemoveActionEnv(gym.Env):
         self.t += 1
         obs, r, d, _, info = self._env.step(self.action)
         
-        if self._env.obs_mode == 'distance_matrix':
-            obs = self.obs
-        elif self.action_mode == 'all_nodes':
+        if self.action_mode == 'all_nodes':
             obs = self.action_mask.astype(int)
+        else:
+            obs = self.obs
             
         done = d or bool(self.t > (self.H-1))
         
