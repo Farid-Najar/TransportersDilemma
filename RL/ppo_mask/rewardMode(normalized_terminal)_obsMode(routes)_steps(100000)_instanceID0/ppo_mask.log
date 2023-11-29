@@ -16,7 +16,7 @@ Number of CPUs = 8
 
 INFO - root :
 the model parameters :
- {'policy_class': <class 'sb3_contrib.common.maskable.policies.MaskableActorCriticPolicy'>, 'device': device(type='cpu'), 'verbose': 1, 'policy_kwargs': {'activation_fn': <class 'torch.nn.modules.activation.ReLU'>, 'share_features_extractor': True, 'net_arch': [2048, 2048, 1024, 512]}, 'num_timesteps': 0, '_total_timesteps': 0, '_num_timesteps_at_start': 0, 'seed': None, 'action_noise': None, 'start_time': 0.0, 'learning_rate': 0.0003, 'tensorboard_log': '/Users/faridounet/PhD/TransportersDilemma/RL/ppo_mask/rewardMode(normalized_terminal)_obsMode(routes)_steps(100000)_instanceID0/', '_last_obs': None, '_last_episode_starts': None, '_last_original_obs': None, '_episode_num': 0, 'use_sde': False, 'sde_sample_freq': -1, '_current_progress_remaining': 1.0, '_stats_window_size': 100, 'ep_info_buffer': None, 'ep_success_buffer': None, '_n_updates': 0, '_custom_logger': False, 'env': <stable_baselines3.common.vec_env.vec_monitor.VecMonitor object at 0x104d6d240>, '_vec_normalize_env': None, 'observation_space': Box(0.0, 1.0, (413,), float64), 'action_space': Discrete(100), 'n_envs': 8, 'n_steps': 256, 'gamma': 0.99, 'gae_lambda': 0.95, 'ent_coef': 0.0, 'vf_coef': 0.5, 'max_grad_norm': 0.5, 'batch_size': 2048, 'n_epochs': 10, 'clip_range': <function constant_fn.<locals>.func at 0x1512a49d0>, 'clip_range_vf': None, 'normalize_advantage': True, 'target_kl': None, 'lr_schedule': <function constant_fn.<locals>.func at 0x1512a6830>, 'policy': MaskableActorCriticPolicy(
+ {'policy_class': <class 'sb3_contrib.common.maskable.policies.MaskableActorCriticPolicy'>, 'device': device(type='cpu'), 'verbose': 1, 'policy_kwargs': {'activation_fn': <class 'torch.nn.modules.activation.ReLU'>, 'share_features_extractor': True, 'net_arch': [2048, 2048, 1024, 512]}, 'num_timesteps': 0, '_total_timesteps': 0, '_num_timesteps_at_start': 0, 'seed': None, 'action_noise': None, 'start_time': 0.0, 'learning_rate': 0.0003, 'tensorboard_log': '/Users/faridounet/PhD/TransportersDilemma/RL/ppo_mask/rewardMode(normalized_terminal)_obsMode(routes)_steps(100000)_instanceID0/', '_last_obs': None, '_last_episode_starts': None, '_last_original_obs': None, '_episode_num': 0, 'use_sde': False, 'sde_sample_freq': -1, '_current_progress_remaining': 1.0, '_stats_window_size': 100, 'ep_info_buffer': None, 'ep_success_buffer': None, '_n_updates': 0, '_custom_logger': False, 'env': <stable_baselines3.common.vec_env.vec_monitor.VecMonitor object at 0x2836fb670>, '_vec_normalize_env': None, 'observation_space': Box(0.0, 1.0, (413,), float64), 'action_space': Discrete(100), 'n_envs': 8, 'n_steps': 256, 'gamma': 0.99, 'gae_lambda': 0.95, 'ent_coef': 0.0, 'vf_coef': 0.5, 'max_grad_norm': 0.5, 'batch_size': 2048, 'n_epochs': 10, 'clip_range': <function constant_fn.<locals>.func at 0x28372a0e0>, 'clip_range_vf': None, 'normalize_advantage': True, 'target_kl': None, 'lr_schedule': <function constant_fn.<locals>.func at 0x28372bf40>, 'policy': MaskableActorCriticPolicy(
   (features_extractor): FlattenExtractor(
     (flatten): Flatten(start_dim=1, end_dim=-1)
   )
@@ -50,13 +50,13 @@ the model parameters :
   )
   (action_net): Linear(in_features=512, out_features=100, bias=True)
   (value_net): Linear(in_features=512, out_features=1, bias=True)
-), 'rollout_buffer': <sb3_contrib.common.maskable.buffers.MaskableRolloutBuffer object at 0x151328760>} 
+), 'rollout_buffer': <sb3_contrib.common.maskable.buffers.MaskableRolloutBuffer object at 0x283736fb0>} 
 
 INFO - root :
 Before training :
- mean, std = 0.7329567670822144, 0.008290057070553303 
+ mean, std = 0.7304399609565735, 5.960464477539063e-08 
 
 INFO - root :
 After training :
- mean, std = 0.8961600065231323, 0.0 
+ mean, std = 0.8998000025749207, 0.0 
 

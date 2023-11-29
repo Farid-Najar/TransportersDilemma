@@ -341,10 +341,10 @@ class CustomCNN(BaseFeaturesExtractor):
         # Re-ordering will be done by pre-preprocessing or wrapper
         n_input_channels = observation_space.shape[0]
         self.cnn = nn.Sequential(
-            nn.Conv2d(n_input_channels, 4, kernel_size=8, stride=4, padding=0),
+            nn.Conv2d(n_input_channels, 32, kernel_size=8, stride=4, padding=0),
             nn.ReLU(),
             # nn.MaxPool2d(15, 2),
-            nn.Conv2d(4, 8, kernel_size=4, stride=2, padding=0),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
             nn.ReLU(),
             nn.Flatten(),
         )
@@ -398,7 +398,7 @@ if __name__ == '__main__':
                         help='Selects the RL algorithm')
     parser.add_argument('--r_mode', default="normalized_terminal", choices=['heuristic', 'terminal', 'normalized_terminal', 'penalize_length'],
                         help='Selects the reward function')
-    parser.add_argument('--obs_mode', default="routes", choices=['distance_matrix','routes', 'action', 'elimination_gain'],
+    parser.add_argument('--obs_mode', default="routes", choices=['cost_matrix','routes', 'action', 'elimination_gain'],
                         help='Selects the observation of the agent.')
     parser.add_argument('--action_mode', default="all_nodes", choices=['destinations', 'all_nodes'],
                         help='Selects the actions of the agent.')
@@ -501,7 +501,7 @@ if __name__ == '__main__':
     else:
         algo_file = None
         
-    if args.obs_mode == 'distance_matrix':
+    if args.obs_mode == 'cost_matrix':
         policy = 'CnnPolicy'
         p_kwargs = dict(
             # normalize
