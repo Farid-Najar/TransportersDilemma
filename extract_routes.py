@@ -1,8 +1,9 @@
 from copy import deepcopy
-from assignment import AssignmentEnv, AssignmentGame, Package
+from assignment import AssignmentEnv, AssignmentGame, Package, RemoveActionEnv
 import numpy as np
 import pickle
 import multiprocess as mp
+from SA_baseline import recuit
 
 def create_routes(env : AssignmentEnv, nb_routes = 5_000, retain_rate = 0.75):
     
@@ -68,12 +69,95 @@ def create_routes(env : AssignmentEnv, nb_routes = 5_000, retain_rate = 0.75):
     np.save(f'routes_K{env._game.num_packages}_retain{retain_rate}', routes) 
     np.save(f'destinations_K{env._game.num_packages}_retain{retain_rate}', destinations) 
     
+
+def create_labels(K = 100):
+    path = 'TransportersDilemma/RL/'
+    with open(path+f'game_K{K}.pkl', 'rb') as f:
+        g = pickle.load(f)
+    routes = np.load(path+f'routes_K{K}.npy')
+    dests = np.load(path+f'destinations_K{K}.npy')
+    
+    def process(g, id, q):
+        np.random.seed(id)
+        
+        env = RemoveActionEnv(game = g, saved_routes = routes, saved_dests=dests, 
+        #   obs_mode='action', 
+          change_instance = False, rewards_mode='normalized_terminal', instance_id = id)
+        env.reset()
+        action_SA, *_ = recuit(env._env, 5000, 1, 0.999, H=100_000)
+        q.put((id, action_SA))
+        print(f'{id} done')
+    
+    q = mp.Manager().Queue()
+    
+    y = np.zeros((len(dests), K))
+    ps = []
+    
+    for i in range(len(y)):
+        ps.append(mp.Process(target = process, args = (deepcopy(g), i, q,)))
+        ps[-1].start()
+        
+    for i in range(len(ps)):
+        ps[i].join()
+        
+    print('all done !')
+    while not q.empty():
+        i, a = q.get()
+        y[i] = a
+        
+    
+    np.save(f'y_K{K}', y)
+    
+
+def create_x(K = 100):
+    path = 'TransportersDilemma/RL/'
+    with open(path+f'game_K{K}.pkl', 'rb') as f:
+        g = pickle.load(f)
+    routes = np.load(path+f'routes_K{K}.npy')
+    dests = np.load(path+f'destinations_K{K}.npy')
+    
+    def process(g, id, q):
+        np.random.seed(id)
+        
+        env = RemoveActionEnv(game = g, saved_routes = routes, saved_dests=dests, 
+        #   obs_mode='action', 
+          change_instance = False, rewards_mode='normalized_terminal', instance_id = id)
+        obs, _ = env.reset()
+        q.put((id, obs))
+        print(f'{id} done')
+    
+    q = mp.Manager().Queue()
+    env = RemoveActionEnv(game = g, saved_routes = routes, saved_dests=dests, 
+        #   obs_mode='action', 
+          change_instance = False, rewards_mode='normalized_terminal', instance_id = 0)
+    obs, _ = env.reset()
+    x = np.zeros((len(dests), *obs.shape))
+    ps = []
+    
+    for i in range(len(x)):
+        ps.append(mp.Process(target = process, args = (deepcopy(g), i, q,)))
+        ps[-1].start()
+        
+    for i in range(len(ps)):
+        ps[i].join()
+        
+    print('all done !')
+    while not q.empty():
+        i, a = q.get()
+        x[i] = a
+        
+    
+    np.save(f'x_K{K}', x)
+    
+
 if __name__ == '__main__':
-    g = AssignmentGame(
-            grid_size=15,
-            max_capacity=25,
-            Q = 35,
-            K=100
-        )
-    env = AssignmentEnv(g)
-    create_routes(env, 2_500, retain_rate=0.8)
+    # g = AssignmentGame(
+    #         grid_size=15,
+    #         max_capacity=25,
+    #         Q = 35,
+    #         K=100
+    #     )
+    # env = AssignmentEnv(g)
+    # create_routes(env, 2_500, retain_rate=0.8)
+    # create_labels()
+    create_x()

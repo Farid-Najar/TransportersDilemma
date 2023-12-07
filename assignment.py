@@ -863,7 +863,7 @@ class AlterActionEnv(gym.Env):
 class RemoveActionEnv(gym.Env):
     
     def __init__(self, 
-                 rewards_mode = 'heuristic',
+                 rewards_mode = 'normalized_terminal',
                  action_mode = 'destinations', # possible values ['destinations', 'all_nodes']
                  *args,
                  **kwargs,
