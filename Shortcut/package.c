@@ -4,8 +4,6 @@
 #include <time.h>
 #include <string.h>
 
-#include <Python.h> // gcc -shared -o package.so package.c -I/opt/homebrew/opt/python@3.10/Frameworks/Python.framework/Versions/3.10/include/python3.10
-#include <numpy/arrayobject.h>
 //the tours are given as a sequence of vertices
 //vertex 0 is the warehouse 
 //it cannot be removed from the tour
@@ -117,23 +115,30 @@ table init_table(int tour_length, int K){//K is the largest number of packages t
     return t;
 }
 
-int *get_solution(table tab, int tour_length){//get a solution from a full dynamic table
-    int *sol = malloc(tab.max_omitted*sizeof(int));
-    int k = tab.max_omitted;
+int *get_solution_single_type(table tab, int k, int tour_length){//get an optimal solution with k omitted packages from a full dynamic table
+    int *sol = malloc(k*sizeof(int));
     int position = tour_length-1;
-    printf("\n K max considéré: %d Position max : %d\n",k,position);
+    //printf("\n K max considéré: %d Position max : %d\n",k,position);
     while(k){//continue until it has found all packets to remove
         int to_remove = tab.sol[k][position];
-        printf("%d %d %d\n",position,k,to_remove);
-            for(int i = 1; i <= to_remove; i++ ){
+        //printf("%d %d %d\n",position,k,to_remove);
+        for(int i = 1; i <= to_remove; i++ ){
             k--;
             sol[k] = position -i;
-            }
+        }
         position -= to_remove+1;
     }
     return sol;
 }
 
+
+int **get_solution_multiple_types(table *tab, int *max_sol, tour *tour, int types){//get a solution from a full dynamic table
+    int **sol = malloc(types*sizeof(int*));
+    for(int i = 0; i< types; i++){
+        sol[i] = get_solution_single_type(tab[i],max_sol[i],tour[i].length);
+    }
+    return sol;
+}
 
 float **compute_delta(graph g, tour t, int k){//compute the difference in cost when removing elements in the tour
     float** delta = malloc(t.length*sizeof(float*));
@@ -172,6 +177,7 @@ table compute_smallest_cost(graph g, tour t, float excess, int K){
                 if(val > tab.values[k][i]){
                     tab.values[k][i] = val;
                     tab.sol[k][i] = j;
+                    if(j>1) printf("Trouvé %d",j);
                 }
             }
         }
@@ -180,7 +186,7 @@ table compute_smallest_cost(graph g, tour t, float excess, int K){
     // for(int i = 0; i <= tab.max_omitted; i++){
     //     printf("\n Number of ommited packages %d, gain %f",i,tab.values[i][t.length -1]);
     // }
-    // int *s = get_solution(tab,t.length);
+    // int *s = get_solution(tab,tab.max_omited,t.length);
     // printf("Position of packages omitted in the solution: ");
     // for(int i = 0; i < tab.max_omitted; i++){
     //     printf("%d ",s[i]);
@@ -189,7 +195,8 @@ table compute_smallest_cost(graph g, tour t, float excess, int K){
 }
 
 
-float value(float **value_tables, float* coeff, int types, int * sol, float excess){//evaluate the value and pollution of a solution
+float value(float **value_tables, float* coeff, int types, int * sol, float excess){//evaluate the cost and pollution reduction of a solution, return the cost reduction (gain) if the pollution 
+                                                                                    //reduction is sufficient (larger than excess)
     float gain = 0;
     float pol = 0;
     for(int i = 0; i < types; i++){
@@ -199,13 +206,14 @@ float value(float **value_tables, float* coeff, int types, int * sol, float exce
     return pol > excess ? gain : 0; 
 }
 
-void best_combination(int k,int types, int current_type, float **value_tables, float *coeff, float excess, int *sol, int *max_val, int* max_sol){//extremly simplistic enumeration of the way to generate k
+void best_combination(int k, int types, int current_type, float **value_tables, float *coeff, float excess, int *sol, float *max_val, int* max_sol){//extremly simplistic enumeration of the way to generate k
+                                                                                                                                                  //as a sum of t positive integers
     int total = 0;
     for(int i = 0; i < current_type; i++){
         total+= sol[i];
     }
     //printf("Total %d current type %d\n",total,current_type);
-    if(current_type == types -1){
+    if(current_type == types -1){//last type, we know the value we have to choose
         
         sol[current_type] = k - total;
         float val = value(value_tables,coeff,types,sol,excess);
@@ -223,81 +231,44 @@ void best_combination(int k,int types, int current_type, float **value_tables, f
     }
 }
 
-void multi_types(graph g, tour *t, float *coeff, int types, float excess, int K){//types is the number of types (and thus of tour and coeff)
-    table *tab = malloc(types*sizeof(table));
-
-    for(int i = 0; i < types; i++){
-        tab[i] = compute_smallest_cost(g, t[i], excess/coeff[i], K);
-    }//extract the best combination of omission between the different types
+void multi_types(graph g, tour *t, float *coeff, int types, float excess){//types is the number of types (and thus of tour and coeff)
+                                                                                 //it is better for perf to give as first tour the one with the largest coeff (more polluting)
+    table *tab = malloc(types*sizeof(table)); //one table for each tour
+    tab[0] = compute_smallest_cost(g, t[0], excess/coeff[0], t[0].length);
+    int max_omission = tab->max_omitted;
+    for(int i = 1; i < types; i++){
+        tab[i] = compute_smallest_cost(g, t[i], excess/coeff[i], max_omission);
+        if(max_omission > tab[i].max_omitted) max_omission = tab[i].max_omitted;
+    }//compute the optimal value, depending on the number of omission, for each tour
+    //extract the best combination of omission between the different types
     float **value_tables = malloc(types*sizeof(float*));
     for(int i = 0; i < types; i++){
-        value_tables[i] = malloc((tab[i].max_omitted+1)*sizeof(float));
-        for(int j = 0; j < tab[i].max_omitted; j++){
+        value_tables[i] = malloc((max_omission+1)*sizeof(float));
+        for(int j = 0; j <= max_omission; j++){
             value_tables[i][j] = tab[i].values[j][t[i].length -1];
         }
     }
     
     int *sol = calloc(types, sizeof(int));
     int *max_sol = calloc(types, sizeof(int));
-    int *max_val = calloc(1,sizeof(int));
-    for(int k = 1; k < K; k++){//we could begin with a larger k, compute by how much
+    float *max_val = calloc(1,sizeof(float));
+    for(int k = 1; k < max_omission+1; k++){//we could compute the best improvement in pollution by removing a single element (or even by removing l elements) -> lower_bound of this loop + cut in the recursive algorithm
         //printf("k: %d \n",k);
         best_combination(k, types, 0, value_tables, coeff, excess, sol, max_val, max_sol);
         if(*max_val != 0){
             break;
         }
     }
-}
-
-PyObject*
-get_shortcut(PyObject* self, PyObject* args)
-{
-    // graph g; tour* t; float* coeff; int types; float excess; int K;
-    PyArrayObject*** cost_matrix;
-    PyArrayObject** tours;
-    float excess;
-    int types;
-    int K;
-
-    PyArg_ParseTuple(args, "OOf", &cost_matrix, &tours, &excess);
-    
-    if (PyErr_Occurred()) return NULL;
-    // // multi_types(g, t, coeff, types, excess, K);
-
-    float*** costs = PyArray_DATA(cost_matrix);
-    npy_intp* cost_shape = PyArray_SHAPE(cost_matrix);
-    npy_intp* tours_shape = PyArray_SHAPE(tours);
-
-    types = (int)cost_shape[0];
-    int vertex_number = (int)cost_shape[1];
-
-    int tour_length = (int)tours_shape[1];
-
-    float** ts = PyArray_DATA(tours);
-
-    return NULL;
-}
-
-static PyMethodDef methods[] = 
-{
-    {"get_shortcut", get_shortcut, METH_VARARGS, 
-        "returns the values and indices of packages that should be removed"
-    },
-    {NULL, NULL, 0, NULL},
-};
-
-static struct PyModuleDef shortcut = {
-    PyModuleDef_HEAD_INIT,
-    "shortcut",
-    "__doc__",
-    -1,
-    methods
-};
-
-PyMODINIT_FUNC PyInit()
-{
-    // printf("Creating the module\n");
-    return PyModule_Create(&shortcut);
+    //Code to print the solution
+    int **final_sol = get_solution_multiple_types(tab,max_sol,t,types);
+    printf("best solution of value: %f\n",*max_val);
+    for(int i=0; i < types;i++){
+        printf("%d packages omitted in tour %d: ",max_sol[i],i);
+        for(int j = 0; j < max_sol[i];j++){
+            printf("%d, ",final_sol[i][j]);
+        }
+        printf("\n");
+    }
 }
 
 
@@ -321,15 +292,16 @@ srand(2);
 // //call the code to test on this simple example, should maximize the value
 // compute_smallest_cost(g, t, 1 , 1);
 
-//larger random example
-graph g = random_graph(1000);
-//show_graph(g);
-tour t = random_perm(100);
-//show_tour(t);
-compute_smallest_cost(g, t, 30, 20);
+// //larger random example
+// graph g = random_graph(100);
+// //show_graph(g);
+// tour t = random_perm(100);
+// //show_tour(t);
+// compute_smallest_cost(g, t, 30, 20);
 
 
 //example with three types of trucks
+graph g = random_graph(100);
 float *coeff = malloc(3*sizeof(float));
 coeff[0]= 0.8;
 coeff[1]= 0.9;
@@ -338,6 +310,5 @@ tour *tht = malloc(3*sizeof(table));
 tht[0] = random_perm(100);
 tht[1] = random_perm(100);
 tht[2] = random_perm(100);
-multi_types(g, tht, coeff, 3, 20, 10);
-
+multi_types(g, tht, coeff, 3, 50);
 }
