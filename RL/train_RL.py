@@ -365,6 +365,62 @@ class CustomCNN(BaseFeaturesExtractor):
     def forward(self, observations: th.Tensor) -> th.Tensor:
         return self.linear(self.cnn(observations))
     
+class Multi(BaseFeaturesExtractor):
+    """
+    :param observation_space: (gym.Space)
+    :param features_dim: (int) Number of features extracted.
+        This corresponds to the number of unit for the last layer.
+    """
+
+    def __init__(self, 
+                 observation_space: spaces.Box, 
+                 hidden_layers : list = [2048, 2048, 1024, 512],
+                #  features_dim: int = 256
+                 ):
+        super().__init__(observation_space, hidden_layers[-1])
+        # We assume CxHxW images (channels first)
+        # Re-ordering will be done by pre-preprocessing or wrapper
+        n_input_channels = observation_space['costs'].shape[0]
+        self.cnn = nn.Sequential(
+            nn.Conv2d(n_input_channels, 32, kernel_size=4, stride=4, padding=0),
+            nn.ReLU(),
+            # nn.MaxPool2d(15, 2),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
+            nn.ReLU(),
+            nn.Flatten(),
+        )
+
+        # Compute shape by doing one forward pass
+        with th.no_grad():
+            n_flatten = self.cnn(
+                th.as_tensor(observation_space.sample()["costs"][None]).float()
+            ).shape[1] + observation_space['other'].shape[0]
+        
+        hidden_layers.insert(0, n_flatten)
+        layers = []
+        for l in range(len(hidden_layers)-1):
+            layers += [
+                nn.Linear(hidden_layers[l], hidden_layers[l+1]),
+                nn.ReLU()
+        ]
+        self.linear = nn.Sequential(
+            *layers
+        )
+
+    def forward(self, observations: th.Tensor) -> th.Tensor:
+        cnn = self.cnn(observations['costs'])
+        # print(cnn.shape)
+        # print(observations["other"].shape)
+        # print(th.cat([
+        #     cnn, observations["other"]
+        #     ], dim=1
+        # ).shape)
+        return self.linear(th.cat([
+            cnn, observations["other"]
+            ], dim=1
+        ))
+
+    
 class GCN(th.nn.Module):
     def __init__(self, observation_space: spaces, hidden_channels):
         super(GCN, self).__init__()
@@ -398,7 +454,7 @@ if __name__ == '__main__':
                         help='Selects the RL algorithm')
     parser.add_argument('--r_mode', default="normalized_terminal", choices=['heuristic', 'terminal', 'normalized_terminal', 'penalize_length'],
                         help='Selects the reward function')
-    parser.add_argument('--obs_mode', default="routes", choices=['cost_matrix','routes', 'action', 'elimination_gain'],
+    parser.add_argument('--obs_mode', default="multi", choices=['cost_matrix','routes', 'action', 'elimination_gain', 'assignment', 'multi'],
                         help='Selects the observation of the agent.')
     parser.add_argument('--action_mode', default="all_nodes", choices=['destinations', 'all_nodes'],
                         help='Selects the actions of the agent.')
@@ -427,7 +483,7 @@ if __name__ == '__main__':
     parser.add_argument('--gamma', type=float, default=0.99,
                        help='the discount factor gamma')
     
-    parser.add_argument('--retain_rate', type=float, default=0.,
+    parser.add_argument('--retain_rate', type=float, default=None,
                        help='the discount factor gamma')
     
     parser.add_argument('--Q', type=float, default=30,
@@ -470,7 +526,7 @@ if __name__ == '__main__':
 
     try:
         if args.load_game:
-            if args.retain_rate == 0:
+            if args.retain_rate is None:
                 with open(f'TransportersDilemma/RL/game_K{args.K}.pkl', 'rb') as f:
                     g = pickle.load(f)
                 routes = np.load(f'TransportersDilemma/RL/routes_K{args.K}.npy')
@@ -507,6 +563,13 @@ if __name__ == '__main__':
             # normalize
             features_extractor_class=CustomCNN,
             features_extractor_kwargs=dict(features_dim=128),
+        )
+    elif args.obs_mode == 'multi':
+        policy = 'MultiInputPolicy'
+        p_kwargs = dict(
+            # normalize
+            features_extractor_class=Multi,
+            # features_extractor_kwargs=dict(features_dim=128),
         )
     else:
         policy = MaskableActorCriticPolicy

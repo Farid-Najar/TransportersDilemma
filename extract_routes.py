@@ -5,7 +5,7 @@ import pickle
 import multiprocess as mp
 from SA_baseline import recuit
 
-def create_routes(env : AssignmentEnv, nb_routes = 5_000, retain_rate = 0.75):
+def create_routes(env : AssignmentEnv, nb_routes = 5_000, retain_rate = 0.):
     
     def process(env, id, q, retained_dests):
         np.random.seed(id)
@@ -151,13 +151,16 @@ def create_x(K = 100):
     
 
 if __name__ == '__main__':
-    # g = AssignmentGame(
-    #         grid_size=15,
-    #         max_capacity=25,
-    #         Q = 35,
-    #         K=100
-    #     )
-    # env = AssignmentEnv(g)
-    # create_routes(env, 2_500, retain_rate=0.8)
+    g = AssignmentGame(
+            grid_size=15,
+            max_capacity=5,
+            Q = 7,
+            K=10,
+            emissions_KM = [.1, .3],
+            costs_KM = [1, 1],
+            seed=42
+        )
+    env = AssignmentEnv(g)
+    create_routes(env, 3_000)#, retain_rate=0.8)
     # create_labels()
-    create_x()
+    # create_x()

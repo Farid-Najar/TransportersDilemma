@@ -226,7 +226,7 @@ void best_combination(int k, int types, int current_type, float **value_tables, 
     }
     
     for(int i = 0; i <= k - total; i++){
-        sol[current_type]=i;
+        sol[current_type]=  i;
         best_combination(k, types, current_type+1, value_tables, coeff, excess, sol, max_val, max_sol);
     }
 }

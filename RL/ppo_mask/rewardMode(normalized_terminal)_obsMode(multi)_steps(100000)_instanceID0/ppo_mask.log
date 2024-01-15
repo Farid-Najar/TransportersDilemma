@@ -1,0 +1,92 @@
+INFO - root :
+Train PPO maskable started ! 
+
+INFO - root :
+Number of CPUs = 8 
+
+INFO - root :
+the model parameters :
+ {'policy_class': <class 'sb3_contrib.common.maskable.policies.MaskableMultiInputActorCriticPolicy'>, 'device': device(type='cpu'), 'verbose': 1, 'policy_kwargs': {'features_extractor_class': <class '__main__.Multi'>}, 'num_timesteps': 0, '_total_timesteps': 0, '_num_timesteps_at_start': 0, 'seed': None, 'action_noise': None, 'start_time': 0.0, 'learning_rate': 0.0003, 'tensorboard_log': '/Users/faridounet/PhD/TransportersDilemma/RL/ppo_mask/rewardMode(normalized_terminal)_obsMode(multi)_steps(100000)_instanceID0/', '_last_obs': None, '_last_episode_starts': None, '_last_original_obs': None, '_episode_num': 0, 'use_sde': False, 'sde_sample_freq': -1, '_current_progress_remaining': 1.0, '_stats_window_size': 100, 'ep_info_buffer': None, 'ep_success_buffer': None, '_n_updates': 0, '_custom_logger': False, 'env': <stable_baselines3.common.vec_env.vec_monitor.VecMonitor object at 0x10510bdc0>, '_vec_normalize_env': None, 'observation_space': Dict('costs': Box(0.0, 1.0, (1, 101, 101), float64), 'other': Box(0.0, 1.0, (109,), float64)), 'action_space': Discrete(100), 'n_envs': 8, 'n_steps': 256, 'gamma': 0.99, 'gae_lambda': 0.95, 'ent_coef': 0.0, 'vf_coef': 0.5, 'max_grad_norm': 0.5, 'batch_size': 2048, 'n_epochs': 10, 'clip_range': <function constant_fn.<locals>.func at 0x289ada4d0>, 'clip_range_vf': None, 'normalize_advantage': True, 'target_kl': None, 'lr_schedule': <function constant_fn.<locals>.func at 0x289ada560>, 'policy': MaskableMultiInputActorCriticPolicy(
+  (features_extractor): Multi(
+    (cnn): Sequential(
+      (0): Conv2d(1, 32, kernel_size=(8, 8), stride=(4, 4))
+      (1): ReLU()
+      (2): Conv2d(32, 64, kernel_size=(4, 4), stride=(2, 2))
+      (3): ReLU()
+      (4): Flatten(start_dim=1, end_dim=-1)
+    )
+    (linear): Sequential(
+      (0): Linear(in_features=7853, out_features=2048, bias=True)
+      (1): ReLU()
+      (2): Linear(in_features=2048, out_features=2048, bias=True)
+      (3): ReLU()
+      (4): Linear(in_features=2048, out_features=1024, bias=True)
+      (5): ReLU()
+      (6): Linear(in_features=1024, out_features=512, bias=True)
+      (7): ReLU()
+    )
+  )
+  (pi_features_extractor): Multi(
+    (cnn): Sequential(
+      (0): Conv2d(1, 32, kernel_size=(8, 8), stride=(4, 4))
+      (1): ReLU()
+      (2): Conv2d(32, 64, kernel_size=(4, 4), stride=(2, 2))
+      (3): ReLU()
+      (4): Flatten(start_dim=1, end_dim=-1)
+    )
+    (linear): Sequential(
+      (0): Linear(in_features=7853, out_features=2048, bias=True)
+      (1): ReLU()
+      (2): Linear(in_features=2048, out_features=2048, bias=True)
+      (3): ReLU()
+      (4): Linear(in_features=2048, out_features=1024, bias=True)
+      (5): ReLU()
+      (6): Linear(in_features=1024, out_features=512, bias=True)
+      (7): ReLU()
+    )
+  )
+  (vf_features_extractor): Multi(
+    (cnn): Sequential(
+      (0): Conv2d(1, 32, kernel_size=(8, 8), stride=(4, 4))
+      (1): ReLU()
+      (2): Conv2d(32, 64, kernel_size=(4, 4), stride=(2, 2))
+      (3): ReLU()
+      (4): Flatten(start_dim=1, end_dim=-1)
+    )
+    (linear): Sequential(
+      (0): Linear(in_features=7853, out_features=2048, bias=True)
+      (1): ReLU()
+      (2): Linear(in_features=2048, out_features=2048, bias=True)
+      (3): ReLU()
+      (4): Linear(in_features=2048, out_features=1024, bias=True)
+      (5): ReLU()
+      (6): Linear(in_features=1024, out_features=512, bias=True)
+      (7): ReLU()
+    )
+  )
+  (mlp_extractor): MlpExtractor(
+    (policy_net): Sequential(
+      (0): Linear(in_features=512, out_features=64, bias=True)
+      (1): Tanh()
+      (2): Linear(in_features=64, out_features=64, bias=True)
+      (3): Tanh()
+    )
+    (value_net): Sequential(
+      (0): Linear(in_features=512, out_features=64, bias=True)
+      (1): Tanh()
+      (2): Linear(in_features=64, out_features=64, bias=True)
+      (3): Tanh()
+    )
+  )
+  (action_net): Linear(in_features=64, out_features=100, bias=True)
+  (value_net): Linear(in_features=64, out_features=1, bias=True)
+), 'rollout_buffer': <sb3_contrib.common.maskable.buffers.MaskableDictRolloutBuffer object at 0x289ad09a0>} 
+
+INFO - root :
+Before training :
+ mean, std = 0.7231199741363525, 0.0 
+
+INFO - root :
+After training :
+ mean, std = 0.8959599733352661, 0.0 
+
