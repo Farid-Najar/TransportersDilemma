@@ -11,7 +11,7 @@ sys.path.insert(1, '/Users/faridounet/PhD/TransportersDilemma')
 
 import numpy as np
 from numba import njit
-from assignment import RemoveActionEnv
+from assignment import AssignmentGame, RemoveActionEnv
 from numba.typed import List
 
 @dataclass
@@ -209,7 +209,7 @@ def multi_types(cost_matrix, routes, coeff, excess):
 
 
 if __name__ == '__main__':
-    env = RemoveActionEnv()
+    env = RemoveActionEnv(game = AssignmentGame(K = 5, Q = 3, max_capacity=3, emissions_KM=[0.15, .3], costs_KM=[1, 1]))
     _, info = env.reset()
     # print(info['excess_emission'])
     routes = np.array([
@@ -234,9 +234,13 @@ if __name__ == '__main__':
     print('excess : ', info_SA['excess_emission'])
     print('r : ', r)
     
-    print(np.where(action_SA == 0))
-
+    # print(np.where(action_SA == 0))
+    print()
+    print(50*'-')
+    print('SHORTCUT')
+    print()
     print(info['excess_emission'])
+    
     coeff = env._env._game.emissions_KM
     CM = np.array([
         env._env.distance_matrix*coeff[i]
