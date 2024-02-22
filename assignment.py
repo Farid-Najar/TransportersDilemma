@@ -493,7 +493,12 @@ def get_d_t(
         l = 2
         
         routes[i, k] = initial_solution[i, j]
-        while initial_solution[i, l] != 0:
+        # distance[i] += distance_matrix[
+        #     int(initial_solution[i, 0]),
+        #     int(initial_solution[i, l]),
+        # ]
+        # print(initial_solution)
+        while k<len(routes[i]):
             if initial_solution[i][l] not in omitted:
                 # print(initial_solution[i, j])
                 routes[i, k+1] = costs_matrix[i][#distance_matrix[
@@ -504,12 +509,23 @@ def get_d_t(
                     int(initial_solution[i, j]),
                     int(initial_solution[i, l]),
                 ]
+                if initial_solution[i, l] == 0:
+                    break
                 j = l
                 # routes[i, k+2] = initial_solution[i, l]
                 k += 2
                 routes[i, k] = initial_solution[i, j]
                 
             l += 2
+        # routes[i, k+1] = costs_matrix[i][#distance_matrix[
+        #     int(initial_solution[i, l-2]),
+        #     int(initial_solution[i, l]),
+        # ]
+        # distance[i] += distance_matrix[
+        #     int(initial_solution[i, l-2]),
+        #     int(initial_solution[i, l]),
+        # ]
+        # print(routes)
             
     #     for j in range(len(sol[i])-1):
     #         routes[i, 2*j + 1] = distance_matrix[sol[i][j], sol[i][j+1]]

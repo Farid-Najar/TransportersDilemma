@@ -8,9 +8,12 @@ from SA_baseline import recuit
 # caution: path[0] is reserved for script path (or '' in REPL)
 # print(str(path)+'/ppo')
 sys.path.insert(1, '/Users/faridounet/PhD/TransportersDilemma')
-
+JIT = True
 import numpy as np
-from numba import njit
+if JIT:
+    from numba import njit
+else:
+    njit = lambda x : x
 from assignment import AssignmentGame, RemoveActionEnv
 from numba.typed import List
 
@@ -19,10 +22,10 @@ class Table:
     values : np.ndarray
     sol : np.ndarray
     max_omitted : np.int64
-# @njit
+@njit
 def compute_delta(cost_matrix, route, k):
     #compute the difference in cost when removing elements in the tour
-    delta = np.zeros((len(route), k+1))#malloc(t.length*sizeof(float*));
+    delta = np.zeros((len(route), k+1), dtype=np.float64)#malloc(t.length*sizeof(float*));
     
     # observation[int(self.initial_routes[m, j])-1] = self.initial_routes[m, j-1] + self.initial_routes[m, j+1] -(
     #                             costs_matrix[m, int(self.initial_routes[m, j-2]), int(self.initial_routes[m, j+2])]
@@ -44,7 +47,7 @@ def compute_delta(cost_matrix, route, k):
     return delta
 
 
-# @njit
+@njit
 def compute_smallest_cost(cost_matrix, route, excess): 
     K = len(route) - 1
     delta = compute_delta(cost_matrix, route, K+1)
@@ -85,17 +88,17 @@ def compute_smallest_cost(cost_matrix, route, excess):
     # // }
     return sol, values, max_omitted
 
-# @njit
+@njit
 def value(value_tables, coeff, types, sol, excess):
     #evaluate the value and pollution of a solution
-    gain = 0
-    # pol = 0
+    gain = 0.
+    pol = 0.
     for i in range(types):
         gain += value_tables[i][sol[i]]
-        # pol += value_tables[i][sol[i]]#coeff[i]*
-    return gain if gain > excess else 0
+        pol += value_tables[i][sol[i]]*coeff[i]
+    return gain if pol > excess else 0.
 
-# @njit
+@njit
 def best_combination(k, types, current_type, value_tables, max_omitted,coeff, excess, sol, max_val, max_sol):
     #extremly simplistic enumeration of the way to generate k
     #we could also determine by dynamic programming all value of k rather than testing every possible value
@@ -119,7 +122,7 @@ def best_combination(k, types, current_type, value_tables, max_omitted,coeff, ex
             sol[current_type] = i
             best_combination(k, types, current_type + 1, value_tables, max_omitted,coeff, excess, sol, max_val, max_sol)
 
-# @njit
+@njit
 def get_solution_single_type(sol, k, tour_length):
     #get an optimal solution with k omitted packages from a full dynamic table
     solution = np.zeros(k, dtype=np.int64)
@@ -138,7 +141,7 @@ def get_solution_single_type(sol, k, tour_length):
     return solution
 
 
-# @njit
+@njit
 def get_solution_multiple_types(sol, max_sol, routes, types):
     #get a solution from a full dynamic table
     solution = []#np.zeros((types, len(routes[0])), dtype=np.int64)
@@ -146,9 +149,9 @@ def get_solution_multiple_types(sol, max_sol, routes, types):
         solution.append(get_solution_single_type(sol[i],max_sol[i],len(routes[i])))
     return solution
     
-# @njit
+@njit
 def multi_types(cost_matrix, routes, coeff, excess):
-    types = len(cost_matrix)
+    types = len(routes)
     K = len(routes[0])-2
    
     #types is the number of types (and thus of tour and coeff)
@@ -163,7 +166,7 @@ def multi_types(cost_matrix, routes, coeff, excess):
     value_tables = []#List()
     
     for i in range(types):
-        sol[i], values[i], max_omitted[i] = compute_smallest_cost(cost_matrix[i], routes[i], excess)#*weight[i])
+        sol[i], values[i], max_omitted[i] = compute_smallest_cost(cost_matrix, routes[i], excess/(coeff[i]+1e-10))
         #extract the best combination of omission between the different types
         value_tables.append(values[i, :max_omitted[i]+1, -1])
 
@@ -189,11 +192,11 @@ def multi_types(cost_matrix, routes, coeff, excess):
         
     final_sol = get_solution_multiple_types(sol, max_sol, routes, types)
     # printf("best solution of value: %f\n",*max_val);
-    for i in range(types):
-        print(max_sol[i], "packages omitted in tour ", i, " : ", end='')
-        for j in range(max_sol[i]):
-            print(final_sol[i][j]," ", end='')
-        print()
+    # for i in range(types):
+    #     print(max_sol[i], "packages omitted in tour ", i, " : ", end='')
+    #     for j in range(max_sol[i]):
+    #         print(final_sol[i][j]," ", end='')
+    #     print()
         
     a = np.array([
         routes[i, final_sol[i][j]]-1
@@ -209,32 +212,56 @@ def multi_types(cost_matrix, routes, coeff, excess):
 
 
 if __name__ == '__main__':
-    env = RemoveActionEnv(game = AssignmentGame(K = 5, Q = 3, max_capacity=3, emissions_KM=[0.15, .3], costs_KM=[1, 1]))
+    # import pickle
+    # try:
+    #     with open(f'TransportersDilemma/RL/game_K1000.pkl', 'rb') as f:
+    #         g = pickle.load(f)
+    # except:
+    #     g = AssignmentGame(grid_size=35, K = 1000, Q = 500, max_capacity=250)
+    #     with open(f'./game_K1000.pkl', 'wb') as f:
+    #         pickle.dump(g, f, -1)
+            
+    # print('The game is ready!')
+        
+    env = RemoveActionEnv(game = AssignmentGame(K = 100, Q = 30, max_capacity=50))
     _, info = env.reset()
-    # print(info['excess_emission'])
+    # print(env._env.distance_matrix*.3)
+    
+    print(info['excess_emission'])
     routes = np.array([
         [
             env._env.initial_routes[m, i] 
             for i in range(0, len(env._env.initial_routes[m]), 2)
         ]
         for m in range(len(env._env.initial_routes))
-    ], dtype=int)
+    ], dtype=np.int64)
+    # print(routes)
     env_SA = deepcopy(env)
-    # print('gains : ', )
+    print('gains : ', )
     action_SA, *_ = recuit(deepcopy(env_SA._env), 5000, 1,0.9999, H=100_000)
     print('sa : ', len(action_SA) - np.sum(action_SA))
     print('sa : ', action_SA)
     print('excess : ', info['excess_emission'])
     ee = info['excess_emission']
+    info_SA = info
     a_SA = np.where(action_SA == 0)[0]
     for aa in a_SA:
-        _, r, *_, info_SA = env_SA.step(aa)
-        print('removed ', aa, ', gained : ', ee - info_SA['excess_emission'])
+        _, r_SA, *_, info_SA = env_SA.step(aa)
+        print('removed ', aa+1, ', gained : ', ee - info_SA['excess_emission'])
         ee = info_SA['excess_emission']
+        
+        # rtes = np.array([
+        # [
+        #     env._env.initial_routes[m, i] 
+        #     for i in range(0, len(env._env.initial_routes[m]), 2)
+        # ]
+        # for m in range(len(env._env.initial_routes))
+        # ], dtype=int)
+        # print(rtes)
     print('excess : ', info_SA['excess_emission'])
-    print('r : ', r)
+    print('r_SA : ', r_SA)
     
-    # print(np.where(action_SA == 0))
+    print(np.where(action_SA == 0))
     print()
     print(50*'-')
     print('SHORTCUT')
@@ -242,18 +269,36 @@ if __name__ == '__main__':
     print(info['excess_emission'])
     
     coeff = env._env._game.emissions_KM
-    CM = np.array([
-        env._env.distance_matrix*coeff[i]
-        for i in range(len(coeff))
-    ])
-    a = multi_types(CM, routes, coeff, info['excess_emission'])
+    # CM = np.array([
+    #     env._env.distance_matrix*coeff[i]
+    #     for i in range(len(coeff))
+    # ]).copy()
+    
+    # assert (CM[1] == env._env.distance_matrix*.3).all()
+    
+    rtes = routes.copy()
+    # print(CM)
+    a = multi_types(env._env.distance_matrix, routes, coeff, info['excess_emission'])
     print(a)
     ee = info['excess_emission']
     print('tot emission : ', ee)
     cum_ee = 0.
     for aa in a:
+        idxi, idxj = np.where(rtes == aa+1)
+        # idxi = idxi[0]
+        # idxj = idxj[0]
+        # i0 = rtes[idxi, idxj-1]
+        # i1 = rtes[idxi, idxj]
+        # i2 = rtes[idxi, idxj+1]
+        # x0 = CM[idxi, i0, i1]
+        # x1 = CM[idxi, i1, i2]
+        # x2 = CM[idxi, i0, i2]
+        # diff = CM[idxi, i0, i1] + CM[idxi, i1, i2] - CM[idxi, i0, i2]
+        # for ii in range(idxj, len(rtes[idxi])-1):
+        #     rtes[idxi, ii] = rtes[idxi, ii+1]
         _, r, *_, inf = env.step(aa)
         eee = ee - inf['excess_emission']
+        # assert abs(eee - diff) < 1e-10
         cum_ee += eee
         print('removed ', aa, ', gained : ', eee)
         print('cumulated : ', cum_ee)
@@ -261,3 +306,5 @@ if __name__ == '__main__':
         ee = inf['excess_emission']
     # _, r, *_ = env.step(a)
     print(r)
+    print(r_SA)
+    print(r_SA<=r)

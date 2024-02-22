@@ -5,7 +5,7 @@ import pickle
 import multiprocess as mp
 from SA_baseline import recuit
 
-def create_routes(env : AssignmentEnv, nb_routes = 5_000, retain_rate = 0.):
+def create_routes(env : AssignmentEnv, nb_routes = 5_000, retain_rate = 0., time_budget = 1):
     
     def process(env, id, q, retained_dests):
         np.random.seed(id)
@@ -26,15 +26,18 @@ def create_routes(env : AssignmentEnv, nb_routes = 5_000, retain_rate = 0.):
             )
             for d in dests
         ]
-        env.reset(packages = packages)
+        env.reset(packages = packages, time_budget = time_budget)
         res = {
             'd' : env.destinations,
             'r' : env.initial_routes
         }
         q.put((id, res))
         print(f'{id} done')
-    
-    with open(f'./game_K{env._game.num_packages}_retain{retain_rate}.pkl', 'wb') as f:
+    if retain_rate:
+        comment = f'_retain{retain_rate}'
+    else:
+        comment = ''
+    with open(f'./game_K{env._game.num_packages}{comment}.pkl', 'wb') as f:
         pickle.dump(env._game, f, -1)
     
     q = mp.Manager().Queue()
@@ -66,8 +69,8 @@ def create_routes(env : AssignmentEnv, nb_routes = 5_000, retain_rate = 0.):
         destinations[i] = d['d']
         
     
-    np.save(f'routes_K{env._game.num_packages}_retain{retain_rate}', routes) 
-    np.save(f'destinations_K{env._game.num_packages}_retain{retain_rate}', destinations) 
+    np.save(f'routes_K{env._game.num_packages}{comment}', routes)
+    np.save(f'destinations_K{env._game.num_packages}{comment}', destinations)
     
 
 def create_labels(K = 100):
@@ -152,15 +155,15 @@ def create_x(K = 100):
 
 if __name__ == '__main__':
     g = AssignmentGame(
-            grid_size=15,
-            max_capacity=5,
-            Q = 7,
-            K=10,
-            emissions_KM = [.1, .3],
-            costs_KM = [1, 1],
+            grid_size=25,
+            max_capacity=80,
+            Q = 70,
+            K=400,
+            emissions_KM = [0., .1, .1, .3, .3],
+            costs_KM = [1, 1, 1, 1, 1],
             seed=42
         )
     env = AssignmentEnv(g)
-    create_routes(env, 3_000)#, retain_rate=0.8)
+    create_routes(env, 5, time_budget=120)#, retain_rate=0.8)
     # create_labels()
     # create_x()

@@ -517,10 +517,10 @@ if __name__ == '__main__':
         comment += f'_instanceID{str(args.instance_id)}'
     if args.algo == 'ppo':
         train_algo = train_PPO
-        save_dir = str(path)+f'/ppo/rewardMode({args.r_mode})_steps({args.steps})'+comment
+        save_dir = str(path)+f'/ppo/K{args.K}_rewardMode({args.r_mode})_steps({args.steps})'+comment
     else:
         train_algo = train_PPO_mask
-        save_dir = str(path)+f'/ppo_mask/rewardMode({args.r_mode})_obsMode({args.obs_mode})_steps({args.steps})'+comment
+        save_dir = str(path)+f'/ppo_mask/K{args.K}_rewardMode({args.r_mode})_obsMode({args.obs_mode})_steps({args.steps})'+comment
     os.makedirs(save_dir, exist_ok=True)
     
 
