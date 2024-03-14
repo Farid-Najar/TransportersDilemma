@@ -56,3 +56,7 @@ INFO - root :
 Before training :
  mean, std = 0.03171328827738762, 0.004485348239541054 
 
+INFO - root :
+After training :
+ mean, std = 0.2077622413635254, 0.02958042174577713 
+

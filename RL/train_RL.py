@@ -576,8 +576,8 @@ if __name__ == '__main__':
         p_kwargs = dict(
             activation_fn=nn.ReLU,#LeakyReLU,
             share_features_extractor=True,
-            net_arch= [1024, 1024, 256, 128] if (
-                args.obs_mode == 'action' and args.action_mode == 'destinations'
+            net_arch= [4096, 4096, 2048, 1024, 512] if (
+                args.K > 250#args.obs_mode == 'action' and args.action_mode == 'destinations'
                 ) else#or args.obs_mode == 'elimination_gain' else
             [2048, 2048, 1024, 512]#, 128]#dict(
             # [2048, 2048, 1024, 256]#, 128]#dict(
