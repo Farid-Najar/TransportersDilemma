@@ -1,10 +1,13 @@
+from copy import deepcopy
+from time import time
 from typing import Dict, List
 import numpy as np
-from assignment import AssignmentGame
+from assignment import AssignmentEnv, GameEnv
 from tqdm import tqdm
 from threading import Thread
 import matplotlib.pyplot as plt
 import multiprocess as mp
+import pickle
 
 #import itertools as it
 from numpy import random as rd
@@ -29,9 +32,9 @@ def LRI(pi, a, r, m, M, b = 3e-3, *args, **kwargs):
     
     return pi
 
-def EXP3(pi, a, r, mu, N, t, gamma = 0.1, *args, **kwargs):
-    global w
-    r = 1 + r/1e9
+def EXP3(w, pi, a, r, mu, N, t, gamma = 0.1, *args, **kwargs):
+    # global w
+    r = 1 + r/2
     assert r>=0 and r<=1
     K = len(pi)
     x = r/pi[a]
@@ -48,10 +51,10 @@ class Player:
         self.mu = np.zeros(num_actions)
         self.N  = np.zeros(num_actions)
         self.strategy = strategy
+        self.w = np.ones(num_actions)
         
-        if self.strategy == EXP3:
-            global w
-            w = np.ones(num_actions)
+        # if self.strategy == EXP3:
+        #     global w
         
     def act(self):
         return int(rd.choice(len(self.pi), p = self.pi))
@@ -66,47 +69,49 @@ class Player:
             
         self.N[action] += 1
         self.pi = self.strategy(
-            pi = self.pi, a = action, r = reward, mu = self.mu, N = self.N, t = np.sum(self.N), m = self.min, M=self.max
+            pi = self.pi, a = action, r = reward, mu = self.mu, N = self.N, t = np.sum(self.N), m = self.min, M=self.max,
+            w = self.w
         )
         
 
-def GameLearning(game : AssignmentGame, strategy = UCB, T = 1_000, log = True):
+def GameLearning(env : AssignmentEnv, strategy = LRI, T = 1_000, log = True):
             
-    players = [Player(game.num_actions, strategy) for _ in range(game.num_packages)]
+    players = [Player(env.num_actions, strategy) for _ in range(env.K)]
     # actions = [players[i].act() for i in range(len(players))]
     # best = rd.randint(game.num_actions, size=game.num_packages, dtype=int)
-    best = np.ones(game.num_packages, dtype=int)
-    r, _, info = game.step(best)
+    best = np.zeros(env.K, dtype=np.int64)
+    _, loss, done, _, info = env.step(best)
     
     for i in range(len(players)):
-        players[i].update(best[i], r)
+        players[i].update(best[i], -loss[i])
     
     res = dict()
     # res['actions_hist'] = [best]
     res['rewards'] = np.zeros(T+1)
-    res['rewards'][0] = r
+    nrmlz = env.K*env.omission_cost
+    res['rewards'][0] = float(done)*(nrmlz + info['r'])/nrmlz
     
     res['infos'] = []
     
-    best_reward = r
+    best_reward = float(done)*(nrmlz + info['r'])/nrmlz
     
     for t in tqdm(range(T)):
         
         try:
-            actions = [players[i].act() for i in range(len(players))]
+            actions = np.array([players[i].act() for i in range(len(players))], dtype=np.int64)
         except Exception as e:
             print('Problem occured :')
             print(e)
-            print(w)
+            # print(w)
             break
-        r, _, info = game.step(actions, call_OR=(t==0))
+        _, loss, done, _, info = env.step(actions)
         for i in range(len(players)):
-            players[i].update(actions[i], r)
+            players[i].update(actions[i], -loss[i])
             
-        res['rewards'][t+1] = r
+        res['rewards'][t+1] = (nrmlz + info['r'])/nrmlz
         
-        if r > best_reward:
-            best_reward = r
+        if float(done)*(nrmlz + info['r'])/nrmlz> best_reward:
+            best_reward = float(done)*(nrmlz + info['r'])/nrmlz
             best = actions.copy()
             res['infos'].append(info)
         if t%20 == 0 and log:
@@ -114,29 +119,44 @@ def GameLearning(game : AssignmentGame, strategy = UCB, T = 1_000, log = True):
             print(t)
             print('excess_emission : ', info['excess_emission'])
             print('omitted : ', info['omitted'])
-            print('reward : ', r)
+            print('reward : ', info['r'])
             print('best reward : ', best_reward)
             
     res['solution'] = best
     return res
             
             
-def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50, log = True):
+def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50, log = True, tsp = False):
 
 
-    def process(game, q, i):
-        res = GameLearning(game, T=T, strategy=strategy, log = log)
+    def process(env, q, i):
+        t0 = time()
+        res = GameLearning(env, T=T, strategy=strategy, log = log)
+        res['time'] = time() - t0
         q.put((i, res))
         # res_dict = d
         
     q = mp.Manager().Queue()
     res = dict()
     ps = []
+    with open(f'TransportersDilemma/RL/game_K{K}.pkl', 'rb') as f:
+        g = pickle.load(f)
+    routes = np.load(f'TransportersDilemma/RL/routes_K{K}.npy')
+    dests = np.load(f'TransportersDilemma/RL/destinations_K{K}.npy')
+
+    # with open(f'game_K{K}.pkl', 'rb') as f:
+    #     g = pickle.load(f)
+    # routes = np.load(f'routes_K{K}.npy')
+    # dests = np.load(f'destinations_K{K}.npy')
+    if tsp:
+        env = GameEnv(AssignmentEnv(g, routes, dests, 'game'))
+    else:
+        env = AssignmentEnv(g, routes, dests, 'game')
+    
     for i in range(n_simulation):
-        game = AssignmentGame(Q=Q, K=K)
-        game.reset()
+        env.reset()
         # threads.append(Thread(target = process, args = (game, res[i])))
-        ps.append(mp.Process(target = process, args = (game, q, i,)))
+        ps.append(mp.Process(target = process, args = (deepcopy(env), q, i,)))
         ps[i].start()
         
     for i in range(n_simulation):
@@ -146,8 +166,7 @@ def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50,
         i, d = q.get()
         res[i] = d
     
-    import pickle
-    with open(f"res_GameLearning_{strategy.__name__}_Q{Q}_K{K}_n{n_simulation}.pkl","wb") as f:
+    with open(f"res_GameLearning_{strategy.__name__}_K{K}_n{n_simulation}.pkl","wb") as f:
         pickle.dump(res, f)
     
     rewards = np.array([
@@ -157,14 +176,14 @@ def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50,
     r_min = np.amin(rewards, axis=0)
     r_max = np.amax(rewards, axis=0)
     r_mean = np.mean(rewards, axis=0)
-    std = np.std(rewards, axis=0)
+    std = np.std(rewards, axis=0) / np.sqrt(len(rewards))
     r_median = np.median(rewards, axis=0)
 
     # fig, ax = plt.subplots(2, 1)
-    plt.plot(r_min, linestyle=':', label='min rewards', color='black')
+    # plt.plot(r_min, linestyle=':', label='min rewards', color='black')
     plt.plot(r_mean, label='mean rewards')
-    plt.plot(r_median, label='median rewards', linestyle='--', color='black')
-    plt.plot(r_max, label='max rewards', linestyle='-.', color='black')
+    # plt.plot(r_median, label='median rewards', linestyle='--', color='black')
+    # plt.plot(r_max, label='max rewards', linestyle='-.', color='black')
     plt.fill_between(range(len(r_mean)), r_mean - 2*std, r_mean + 2*std, alpha=0.3, label="mean $\pm 2\sigma$")
     plt.fill_between(range(len(r_mean)), r_mean - std, r_mean + std, alpha=0.7, label="mean $\pm \sigma$")
     plt.title(f'Rewards in {strategy.__name__}')
@@ -176,7 +195,14 @@ def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50,
     # print('solution : ', sol)
     
 if __name__ == '__main__' :
-    make_different_sims(strategy = UCB, n_simulation=100, T=1_000, log=False)
-    # game = AssignmentGame(Q=30)
-    # game.reset(num_packages = 50)
-    # GameLearning(game, strategy=LRI)
+    K = 50
+    make_different_sims(K = K, strategy = LRI, n_simulation=52, T=50_000, log=False, tsp=True)
+    # game = AssignmentEnv(obs_mode='game')
+    # game.reset()
+    # with open(f'TransportersDilemma/RL/game_K{K}.pkl', 'rb') as f:
+    #     g = pickle.load(f)
+    # routes = np.load(f'TransportersDilemma/RL/routes_K{K}.npy')
+    # dests = np.load(f'TransportersDilemma/RL/destinations_K{K}.npy')
+    # env = AssignmentEnv(g, routes, dests, 'game')
+    # env.reset()
+    # GameLearning(env, strategy=EXP3)
