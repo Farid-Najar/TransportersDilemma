@@ -19,6 +19,20 @@ def UCB(pi, a, r, mu, N, t, confidence_level = 0.7, *args, **kwargs):
     pi[A] = 1
     return pi
 
+def EGreedy(pi, a, r, mu, N, t, epsilon = 0.1, *args, **kwargs):
+    pi = np.zeros(mu.shape)
+    if not N.all():
+        A = np.argmin(N)
+        pi[A] = 1
+        return pi
+    if np.random.rand()<epsilon:
+        pi += 1/len(mu)
+        return pi
+    
+    A = np.argmax(mu)
+    pi[A] = 1
+    return pi
+
 def LRI(pi, a, r, m, M, b = 3e-3, *args, **kwargs):
     pi_a = pi[a]
     if M==m:
@@ -79,7 +93,7 @@ def GameLearning(env : AssignmentEnv, strategy = LRI, T = 1_000, log = True):
     players = [Player(env.num_actions, strategy) for _ in range(env.K)]
     # actions = [players[i].act() for i in range(len(players))]
     # best = rd.randint(game.num_actions, size=game.num_packages, dtype=int)
-    best = np.zeros(env.K, dtype=np.int64)
+    best = np.random.randint(env.num_actions, size=env.K)#np.zeros(env.K, dtype=np.int64)
     _, loss, done, _, info = env.step(best)
     
     for i in range(len(players)):
@@ -126,7 +140,7 @@ def GameLearning(env : AssignmentEnv, strategy = LRI, T = 1_000, log = True):
     return res
             
             
-def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50, log = True, tsp = False):
+def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50, log = True, tsp = False, comment = ''):
 
 
     def process(env, q, i):
@@ -166,7 +180,7 @@ def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50,
         i, d = q.get()
         res[i] = d
     
-    with open(f"res_GameLearning_{strategy.__name__}_K{K}_n{n_simulation}.pkl","wb") as f:
+    with open(f"res_GameLearning_{strategy.__name__}_K{K}_n{n_simulation}{comment}.pkl","wb") as f:
         pickle.dump(res, f)
     
     rewards = np.array([
@@ -195,8 +209,8 @@ def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50,
     # print('solution : ', sol)
     
 if __name__ == '__main__' :
-    K = 50
-    make_different_sims(K = K, strategy = LRI, n_simulation=52, T=50_000, log=False, tsp=True)
+    K = 250
+    make_different_sims(K = K, strategy = EXP3, n_simulation=52, T=50_000, log=False, tsp=False, comment = 'randomStart')
     # game = AssignmentEnv(obs_mode='game')
     # game.reset()
     # with open(f'TransportersDilemma/RL/game_K{K}.pkl', 'rb') as f:

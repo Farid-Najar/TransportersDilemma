@@ -902,9 +902,10 @@ class AssignmentEnv(gym.Env):
                 self.costs_matrix, self.initial_routes, self.observation_space.shape, False
             )
         
-            info['LCF'] = np.concatenate([[0], costs + emissions*self._game.CO2_penalty])
+            info['LCF'] = np.concatenate([[self._game.omission_cost], costs + emissions*self._game.CO2_penalty])
             info['GCF'] = np.sum(info['LCF'])
-            r = self.observation.copy() + np.maximum(0, info['LCF'][alpha] - info['GCF']/self._game.num_packages) + (alpha == 0)*self._game.omission_cost
+            # r = self.observation.copy() + np.maximum(0, info['LCF'][alpha] - info['GCF']/self._game.num_packages) + (alpha == 0)*self._game.omission_cost
+            r = self.observation.copy()/np.max(self.observation) + (info['LCF'][alpha] - np.min(info['LCF']))/(np.max(info['LCF']) - np.min(info['LCF']))#np.maximum(0, info['LCF'][alpha] - info['GCF']/self._game.num_packages)
             
         #total_costs + max(0, total_emissions - self._game.Q)*self._game.CO2_penalty
         # + omission_penalty
@@ -1322,8 +1323,9 @@ class GameEnv(gym.Env):
                     
                     j = np.argmin(self.cost_matrix[i-1, routes[i][-1], alpha])
                     dest = alpha.pop(j)
-                    costs[i-1] += self.distance_matrix[routes[i][-1], dest]*self.costs_KM[i-1]
-                    emissions[i-1] += self.distance_matrix[routes[i][-1], dest]*self.emissions_KM[i-1]
+                    if len(routes[i]) <= self.max_capacity:
+                        costs[i-1] += self.distance_matrix[routes[i][-1], dest]*self.costs_KM[i-1]
+                        emissions[i-1] += self.distance_matrix[routes[i][-1], dest]*self.emissions_KM[i-1]
                     info['LCF'][i-1] += self.cost_matrix[i-1, routes[i][-1], dest]
                     routes[i].append(dest)
                     if len(routes[i]) > 2:
