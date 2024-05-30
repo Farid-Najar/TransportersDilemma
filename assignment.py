@@ -505,10 +505,21 @@ def get_d_t(
                     int(initial_solution[i, j]),
                     int(initial_solution[i, l]),
                 ]
+                # print('indices', int(initial_solution[i, j]), int(initial_solution[i, l]))
+                # print('cost', routes[i, k+1])
+                # # print(np.where(distance_matrix == 0))
+                # print(distance_matrix)
+                # assert False
+                # print((distance_matrix + np.eye(*distance_matrix.shape)).all())
+                # print('distance', distance_matrix[
+                #     int(initial_solution[i, j]),
+                #     int(initial_solution[i, l]),
+                # ])
                 distance[i] += distance_matrix[
                     int(initial_solution[i, j]),
                     int(initial_solution[i, l]),
                 ]
+                # print(distance[i])
                 if initial_solution[i, l] == 0:
                     break
                 j = l
@@ -566,7 +577,8 @@ class AssignmentEnv(gym.Env):
                  game : AssignmentGame = None, 
                  saved_routes = None,
                  saved_dests = None,
-                 obs_mode = 'routes', # possible values ['multi', 'cost_matrix','routes', 'action', 'elimination_gain', 'assignment', 'game']
+                 saved_q = None,
+                 obs_mode = 'routes', # possible values ['multi', 'cost_matrix','routes', 'action', 'elimination_gain', 'assignment', 'game', 'state']
                  change_instance = True,
                  instance_id = 0,
                  ):
@@ -592,6 +604,10 @@ class AssignmentEnv(gym.Env):
                 "other" : (self._game.max_capacity + 2)*self._game.num_vehicles + 1
             }
             
+        # elif obs_mode == 'state':
+        #     self.obs_dim = (self._game.max_capacity + 2)*self._game.num_vehicles + 1 + self.K *(self._game.max_capacity + 1)
+            
+        
         elif obs_mode == 'routes':
             self.obs_dim = ((2*(self._game.max_capacity+2)-1)*self._game.num_vehicles) + 2*self._game.num_packages +1
             
@@ -605,18 +621,18 @@ class AssignmentEnv(gym.Env):
         if saved_routes is not None:
             assert saved_dests is not None
             assert len(saved_routes) == len(saved_dests)
-            self.order = np.arange(len(saved_dests), dtype=int)
-            if change_instance:
-                np.random.shuffle(self.order)
+            # self.order = np.arange(len(saved_dests), dtype=int)
+            # if change_instance:
+            #     np.random.shuffle(self.order)
             
         self.change_instance = change_instance
         self.saved_routes = saved_routes
         self.saved_dests = saved_dests
+        self.saved_q = saved_q
         # self.new_routes = []
         # self.new_dests = []
         self.reset_counter = instance_id
         # print(self.obs_dim)
-        
         
         if obs_mode == 'action':
             self.observation_space = gym.spaces.MultiBinary(self._game.num_packages)
@@ -646,6 +662,8 @@ class AssignmentEnv(gym.Env):
               **kwargs,
               ) -> tuple[np.ndarray, dict[str, Any]]:
         
+        self.quantities = np.ones(self.K, dtype=int)
+        
         if self.saved_routes is not None:
             # np.zeros((self._game.num_vehicles, 2*(self._game.max_capacity+2)-1))
             if self.reset_counter == len(self.saved_routes):
@@ -660,20 +678,25 @@ class AssignmentEnv(gym.Env):
                 # ])
                 # self.new_routes = []
                 # self.new_dests = []
-                np.random.shuffle(self.order)
+                # np.random.shuffle(self.order)
                 assert self.saved_routes.shape[1:] == (self._game.num_vehicles, 2*(self._game.max_capacity+2)-1)
                 # name = str(time())
                 # np.save(name + '_routes', np.array(self.new_routes))
                 # np.save(name + '_dests', np.array(self.new_dests))
                 
-            self.destinations = np.array(self.saved_dests[self.order[self.reset_counter]], dtype=int)
+            self.destinations = np.array(self.saved_dests[self.reset_counter], dtype=int)
+            if self.saved_q is not None:
+                self.quantities = np.array(self.saved_q[self.reset_counter], dtype=int)
+            # print(self.reset_counter)
+            # self.destinations = np.array(self.saved_dests[self.order[self.reset_counter]], dtype=int)
+            
             # self.destinations.sort()
             packages = [
                 Package(
-                    destination=d,
-                    quantity=1,#TODO
+                    destination=self.destinations[i],
+                    quantity=self.quantities[i],
                 )
-                for d in self.destinations
+                for i in range(len(self.destinations))
             ]
         
         self._game.reset(packages, seed)
@@ -684,14 +707,17 @@ class AssignmentEnv(gym.Env):
             ])
         
         
-        self.quantities = np.array([
-            p.quantity for p in self._game.packages
-        ])
-        
         # Costs + emission penalty
         l = [self._game.hub] + list(self.destinations)
         self.mask = np.ix_(l, l)
         self.distance_matrix = self._game.distance_matrix[self.mask]
+        if not len(self.destinations) == len(set(self.destinations)):
+            import collections
+            print(len(self.distance_matrix))
+            print(self.destinations)
+            print([item for item, count in collections.Counter(self.destinations).items() if count > 1])
+            assert False
+        assert (self.distance_matrix + np.eye(len(self.distance_matrix)) > 0).all()
         self.costs_matrix = np.array([
             (self._game.costs_KM[m] + self._game.CO2_penalty*self._game.emissions_KM[m])*self.distance_matrix
             for m in range(len(self._game.costs_KM))
@@ -707,7 +733,9 @@ class AssignmentEnv(gym.Env):
             )
             
         else:
-            self.initial_routes = self.saved_routes[self.order[self.reset_counter]]
+            # self.initial_routes = self.saved_routes[self.order[self.reset_counter]]
+            self.initial_routes = self.saved_routes[self.reset_counter]
+            # print(self.initial_routes)
             _, distance, _, omitted, _ = get_d_t(
                 a,
                 self.distance_matrix,
@@ -731,7 +759,8 @@ class AssignmentEnv(gym.Env):
             
             # info['solution'] = self.solutions if sol is None else sol
         
-        
+        if self.change_instance:
+                self.reset_counter += 1
         # self.initial_routes = List()
         # for lst in self._game.solutions[0]:
         #     l = List()
@@ -748,6 +777,8 @@ class AssignmentEnv(gym.Env):
                 for j in range(len(self._game.solutions[0][i])-1):
                     self.initial_routes[i, 2*j] = self._game.solutions[0][i][j]
                     self.initial_routes[i, 2*j + 1] = self.costs_matrix[i][self._game.solutions[0][i][j], self._game.solutions[0][i][j+1]]
+                    # print(self.initial_routes)
+            
                     #self._game.distance_matrix[self._game.solutions[0][i][j], self._game.solutions[0][i][j+1]]
                     
             # self.new_routes.append(deepcopy(self.initial_routes))
@@ -756,8 +787,6 @@ class AssignmentEnv(gym.Env):
         # else:
         #     self.initial_routes = self.saved_routes[self.order[self.reset_counter]]
         
-        if self.change_instance:
-            self.reset_counter += 1
             
         if self.obs_mode == 'cost_matrix' or self.obs_mode == 'multi':
             

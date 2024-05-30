@@ -209,8 +209,8 @@ def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50,
     # print('solution : ', sol)
     
 if __name__ == '__main__' :
-    K = 250
-    make_different_sims(K = K, strategy = EXP3, n_simulation=52, T=50_000, log=False, tsp=False, comment = 'randomStart')
+    K = 100
+    make_different_sims(K = K, strategy = LRI, n_simulation=50, T=50_000, log=False, tsp=True, comment = 'randomStart')
     # game = AssignmentEnv(obs_mode='game')
     # game.reset()
     # with open(f'TransportersDilemma/RL/game_K{K}.pkl', 'rb') as f:

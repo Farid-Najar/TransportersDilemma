@@ -378,15 +378,16 @@ class Multi(BaseFeaturesExtractor):
                 #  features_dim: int = 256
                  ):
         super().__init__(observation_space, hidden_layers[-1])
+        # print(observation_space.sample())
         # We assume CxHxW images (channels first)
         # Re-ordering will be done by pre-preprocessing or wrapper
-        n_input_channels = observation_space['costs'].shape[0]
+        # n_input_channels = observation_space['costs'].shape[0]
         self.cnn = nn.Sequential(
-            nn.Conv2d(n_input_channels, 32, kernel_size=4, stride=4, padding=0),
-            nn.ReLU(),
-            # nn.MaxPool2d(15, 2),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
-            nn.ReLU(),
+            # nn.Conv2d(n_input_channels, 32, kernel_size=4, stride=4, padding=0),
+            # nn.ReLU(),
+            # # nn.MaxPool2d(15, 2),
+            # nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
+            # nn.ReLU(),
             nn.Flatten(),
         )
 
@@ -456,7 +457,7 @@ if __name__ == '__main__':
                         help='Selects the reward function')
     parser.add_argument('--obs_mode', default="multi", choices=['cost_matrix','routes', 'action', 'elimination_gain', 'assignment', 'multi'],
                         help='Selects the observation of the agent.')
-    parser.add_argument('--action_mode', default="all_nodes", choices=['destinations', 'all_nodes'],
+    parser.add_argument('--action_mode', default="destinations", choices=['destinations', 'all_nodes'],
                         help='Selects the actions of the agent.')
     
     parser.add_argument('--n_steps', type=int, default=256,
@@ -579,7 +580,7 @@ if __name__ == '__main__':
             net_arch= [4096, 4096, 2048, 1024, 512] if (
                 args.K > 250#args.obs_mode == 'action' and args.action_mode == 'destinations'
                 ) else#or args.obs_mode == 'elimination_gain' else
-            [2048, 2048, 1024, 512]#, 128]#dict(
+            [4096, 2048, 2048, 1024, 512]#, 128]#dict(
             # [2048, 2048, 1024, 256]#, 128]#dict(
             #    pi=[2048, 2048, 1024, 256],#, 128], 
             #    vf=[2048, 2048, 1024, 256])#, 128])
@@ -614,4 +615,6 @@ if __name__ == '__main__':
     
     # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 500000 --change_instance True
     # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 100000  --obs_mode action --K 100
+    # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 1000000  --obs_mode multi --K 50 --change_instance True
     # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 100000 --K 100 --action_mode destinations
+    # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 1000001 --K 50 --retain_rate 0.8 --change_instance True
