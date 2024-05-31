@@ -325,4 +325,16 @@ if __name__ == '__main__':
     # create_labels()
     # create_x()
     # test()
-    create_quantities(1100, time_budget=10)
+    # create_quantities(1100, time_budget=10)
+    
+    g = AssignmentGame(
+            grid_size=12,
+            max_capacity=8,
+            Q = 5,
+            K=16,
+            emissions_KM = [.1, .3],
+            costs_KM = [1, 1],
+            seed=42
+        )
+    env = AssignmentEnv(g)
+    create_routes(env, 1000, time_budget=5)

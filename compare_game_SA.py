@@ -191,6 +191,7 @@ def compare(
         ps[4*i+2].start()
         ps[4*i+3].start()
         
+    # for i in range(n_simulation):
         ps[4*i].join()
         ps[4*i+1].join()
         ps[4*i+2].join()
@@ -593,6 +594,7 @@ def compare_SA_DP(
             
 if __name__ == '__main__' :
     # compare_SA_DP(n_simulation=50, K=50)
-    compare(n_simulation=100, K=50)
-    compare(n_simulation=100, K=100, Q=40)
+    compare(n_simulation=100, K=16)
+    # compare(n_simulation=100, K=50)
+    # compare(n_simulation=100, K=100, Q=40)
     # run_DP(n_simulation=50, K=100)
