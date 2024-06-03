@@ -70,8 +70,9 @@ def recuit(game : AssignmentEnv, T_init, T_limit, lamb = .99, var = False, id = 
             lamb = .999
         #print(T)
 
-    print(f'm = {m}')
-    print(eval_best)
+    if log:
+        print(f'm = {m}')
+        print(eval_best)
     return best, list_best_costs, infos
 
 

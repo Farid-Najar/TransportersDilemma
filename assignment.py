@@ -1019,7 +1019,7 @@ class AlterActionEnv(gym.Env):
     
 class RemoveActionEnv(gym.Env):
     
-    def __init__(self, 
+    def __init__(self,
                  rewards_mode = 'normalized_terminal',
                  action_mode = 'destinations', # possible values ['destinations', 'all_nodes']
                  *args,
@@ -1129,7 +1129,7 @@ class RemoveActionEnv(gym.Env):
             
         done = d or bool(self.t > (self.H-1))
         
-        normalizer_const = self._env._game.num_packages*self._env._game.omission_cost
+        normalizer_const = np.sum(self._env.quantities)*self._env._game.omission_cost
         
         if self.rewards_mode == 'terminal':
             r = float(done)*(r+normalizer_const)
@@ -1504,18 +1504,30 @@ def test_assignment_env(game = None, K = 500, log = True, plot = True):
         plt.plot(rewards)
         plt.show()
 if __name__ == '__main__':
-    game = AssignmentGame(
-            Q=0,
-            K = 100,
-            grid_size=25,
-            max_capacity=125
+    # game = AssignmentGame(
+    #         Q=0,
+    #         K = 100,
+    #         grid_size=25,
+    #         max_capacity=125
+    #     )
+    
+    # # env = AssignmentEnv(game)
+    # # print(env.obs_dim)
+    
+    # # test_assignment_game(game, log = False)
+    # # print('game ok!')
+    # # test_assignment_env(game, log = False)
+    # test_assignment_AlterAction_env(game, log = False)
+    # print('env ok!')
+    g = AssignmentGame(
+            grid_size=12,
+            max_capacity=1,
+            Q = 1,
+            K=2,
+            emissions_KM = [.1, .3],
+            costs_KM = [1, 1],
+            seed=42
         )
-    
-    # env = AssignmentEnv(game)
-    # print(env.obs_dim)
-    
-    # test_assignment_game(game, log = False)
-    # print('game ok!')
-    # test_assignment_env(game, log = False)
-    test_assignment_AlterAction_env(game, log = False)
-    print('env ok!')
+    env = RemoveActionEnv(g)
+    env.reset()
+    env._env.K

@@ -330,7 +330,7 @@ if __name__ == '__main__':
     g = AssignmentGame(
             grid_size=12,
             max_capacity=8,
-            Q = 5,
+            Q = 6,
             K=16,
             emissions_KM = [.1, .3],
             costs_KM = [1, 1],
