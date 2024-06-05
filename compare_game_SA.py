@@ -54,13 +54,19 @@ def compare(
     lamb = 0.9999,
     log = False,
     packages = None,
+    retain = None,
     ):
     
-    with open(f'TransportersDilemma/RL/game_K{K}.pkl', 'rb') as f:
-        g = pickle.load(f)
-    routes = np.load(f'TransportersDilemma/RL/routes_K{K}.npy')
-    dests = np.load(f'TransportersDilemma/RL/destinations_K{K}.npy')
-    
+    if retain is None:
+        with open(f'TransportersDilemma/RL/game_K{K}.pkl', 'rb') as f:
+            g = pickle.load(f)
+        routes = np.load(f'TransportersDilemma/RL/routes_K{K}.npy')
+        dests = np.load(f'TransportersDilemma/RL/destinations_K{K}.npy')
+    else:
+        with open(f'TransportersDilemma/RL/game_K{K}_retain{retain}.pkl', 'rb') as f:
+            g = pickle.load(f)
+        routes = np.load(f'TransportersDilemma/RL/routes_K{K}_retain{retain}.npy')
+        dests = np.load(f'TransportersDilemma/RL/destinations_K{K}_retain{retain}.npy')
     if Q is not None:
         g.Q = Q
     
@@ -594,7 +600,8 @@ def compare_SA_DP(
             
 if __name__ == '__main__' :
     # compare_SA_DP(n_simulation=50, K=50)
-    compare(n_simulation=100, K=16)
-    # compare(n_simulation=100, K=50)
+    # compare(n_simulation=100, K=16)
+    # compare(n_simulation=100, K=20, retain=1.)
+    compare(n_simulation=100, K=50)
     # compare(n_simulation=100, K=100, Q=40)
     # run_DP(n_simulation=50, K=100)

@@ -64,7 +64,6 @@ class AssignmentGame:
         nx.set_edge_attributes(self.G, distances)
         self.distance_matrix = nx.floyd_warshall_numpy(self.G, weight = 'distance')
         self.time_matrix = self.distance_matrix/40 #In cities, the average speed is 40 km/h
-        self.mask = None
         
         
         self.omission_cost = (2*np.max(self.distance_matrix) +1)*np.max(self.costs_KM)
@@ -276,12 +275,11 @@ class AssignmentGame:
         #         omitted += 1
         # # print(nodes)
         
-        if self.mask is None:
-            if np.sum(actions) == self.num_packages:
-                l = [self.hub] + list(nodes[0])
-                self.mask = np.ix_(l, l)
-            else:
-                raise("You have to call the OR-routing at least once with all packages included !")
+        if np.sum(actions) == self.num_packages:
+            l = [self.hub] + list(nodes[0])
+            mask = np.ix_(l, l)
+        else:
+            raise("You have to call the OR-routing at least once with all packages included !")
         
         sol = None
         
@@ -308,8 +306,8 @@ class AssignmentGame:
                 for m in range(len(self.solutions[0]))
             ]
             
-        distance_matrix = self.distance_matrix[self.mask]
-        time_matrix = self.time_matrix[self.mask]
+        distance_matrix = self.distance_matrix[mask]
+        time_matrix = self.time_matrix[mask]
         distance = np.zeros(self.num_vehicles)
         time = np.zeros(self.num_vehicles)
         for m in range(len(sol)):
@@ -317,24 +315,7 @@ class AssignmentGame:
                 distance[m] += distance_matrix[sol[m][i], sol[m][i+1]]
                 time[m] += time_matrix[sol[m][i], sol[m][i+1]]
                 
-        # mask_is_None = self.mask is None
-        # if mask_is_None:
-        #     self.mask = np.zeros(self.num_packages+1)
-            
-        # sol, distance, time, omitted, self.mask = _aux(
-        #     actions,
-        #     self.packages,
-        #     self.mask,
-        #     self.num_vehicles,
-        #     time_budget,
-        #     mask_is_None,
-        #     call_OR,
-        #     self.distance_matrix,
-        #     self.time_matrix,
-        #     self.solutions,
-        #     self.transporter,
-        #     self.num_packages,
-        # )
+
         omission_penalty = self.omission_cost*omitted
         
         
@@ -723,7 +704,7 @@ class AssignmentEnv(gym.Env):
             for m in range(len(self._game.costs_KM))
         ])# TODO for more complexe cost functions
         
-        self.time_matrix = self._game.time_matrix[self._game.mask]
+        self.time_matrix = self._game.time_matrix[self.mask]
         
         a = np.ones(self._game.num_packages, dtype=int)
         if self.saved_routes is None:# or self.reset_counter%500 == 0:
