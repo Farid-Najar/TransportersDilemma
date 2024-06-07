@@ -602,6 +602,6 @@ if __name__ == '__main__' :
     # compare_SA_DP(n_simulation=50, K=50)
     # compare(n_simulation=100, K=16)
     # compare(n_simulation=100, K=20, retain=1.)
-    compare(n_simulation=100, K=50)
-    # compare(n_simulation=100, K=100, Q=40)
+    # compare(n_simulation=100, K=50)
+    compare(n_simulation=100, K=100, Q=40)
     # run_DP(n_simulation=50, K=100)

@@ -60,7 +60,7 @@ def compute_smallest_cost(cost_matrix, route, excess):
     max_omitted = 0
     for k in range(1, K):
         if values[k-1, len(route)-1] >= excess:
-            print("trouve assez de packets avec le camion :",k-1,values[k-1, len(route)-1])
+            # print("trouve assez de packets avec le camion :",k-1,values[k-1, len(route)-1])
             break
         # while the pollution constraint is violated, try to remove one additional package
         max_omitted = k
@@ -96,7 +96,9 @@ def value(value_tables, coeff, types, sol, excess):
     for i in range(types):
         gain += value_tables[i][sol[i]]
         pol += value_tables[i][sol[i]]*coeff[i]
-    return gain if pol > excess else 0.
+    # print('gain : ', gain)
+    # print('pol : ', pol)
+    return gain if pol >= excess else 0.
 
 @njit
 def best_combination(k, types, current_type, value_tables, max_omitted,coeff, excess, sol, max_val, max_sol):
@@ -110,15 +112,16 @@ def best_combination(k, types, current_type, value_tables, max_omitted,coeff, ex
         sol[current_type] = k - total
         val = value(value_tables,coeff,types,sol,excess)
         #print("value : %f \n",val)
-        if (val > max_val):
+        if (val > max_val[0]):
             max_val[0] = val
+            # print('max val : ', max_val)
             max_sol[:] = sol[:]
             # for i in range(sol.shape[0]):
             #     max_sol[i] = sol[i]
             #max_sol =  sol
             #print("solution trouvée : ",max_sol,"k : ",k,"index actif",current_type)    
     else:    
-        for i in range(min(k - total + 1,max_omitted[current_type])):
+        for i in range(min(k - total + 1,max_omitted[current_type] + 1)):
             sol[current_type] = i
             best_combination(k, types, current_type + 1, value_tables, max_omitted,coeff, excess, sol, max_val, max_sol)
 
@@ -164,6 +167,7 @@ def multi_types(cost_matrix, routes, coeff, excess):
     #weight = coeff/np.sum(coeff)
     
     value_tables = []#List()
+    # print('excess/coeff : ', excess/(coeff+1e-10))
     
     for i in range(types):
         sol[i], values[i], max_omitted[i] = compute_smallest_cost(cost_matrix, routes[i], excess/(coeff[i]+1e-10))
@@ -181,13 +185,13 @@ def multi_types(cost_matrix, routes, coeff, excess):
     solution = np.zeros(types, dtype=np.int64)
     max_sol = np.zeros(types, dtype=np.int64)
     max_val = np.zeros(1)
-    print("max ommited:",max_omitted)
-    for k in range(1, max_omitted.sum()):
+    # print("max ommited:",max_omitted)
+    for k in range(1, max_omitted.sum() +1):
         #we could begin with a larger k, compute by how much
         #printf("k: %d \n",k);
         best_combination(k, types, 0, value_tables,max_omitted, coeff, excess, solution, max_val, max_sol)
         if(max_val[0] != 0):
-            print("solution de taille",k,max_sol,"valeur",max_val[0])
+            # print("solution de taille",k,max_sol,"valeur",max_val[0])
             break
         
     final_sol = get_solution_multiple_types(sol, max_sol, routes, types)
@@ -198,11 +202,14 @@ def multi_types(cost_matrix, routes, coeff, excess):
     #         print(final_sol[i][j]," ", end='')
     #     print()
         
+    # print(final_sol)
     a = np.array([
         routes[i, final_sol[i][j]]-1
         for i in range(len(final_sol))
         for j in range(len(final_sol[i]))
     ], dtype=np.int64)#np.zeros(len(cost_matrix)-1)
+    
+    # print(value_tables)
     
     # for i in range(types):
     #     for j in range(max_sol[i]):
@@ -227,7 +234,7 @@ if __name__ == '__main__':
     _, info = env.reset()
     # print(env._env.distance_matrix*.3)
     
-    print(info['excess_emission'])
+    # print(info['excess_emission'])
     routes = np.array([
         [
             env._env.initial_routes[m, i] 
@@ -235,7 +242,7 @@ if __name__ == '__main__':
         ]
         for m in range(len(env._env.initial_routes))
     ], dtype=np.int64)
-    # print(routes)
+    print(routes)
     env_SA = deepcopy(env)
     print('gains : ', )
     action_SA, *_ = recuit(deepcopy(env_SA._env), 5000, 1,0.9999, H=100_000)

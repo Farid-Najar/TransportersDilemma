@@ -18,12 +18,27 @@ class Package:
     destination : int
     origin : int = 0
     quantity : int = 1
+    
+
+@njit(parallel = True)
+def generate_D(n, grid_size):
+    coordy = grid_size *  np.random.random_sample((n,)) # generate random y
+    coordx = grid_size *  np.random.random_sample((n,)) # generate random x
+
+    D = np.zeros((n, n), dtype=np.int64)
+    for i in range(n):
+        for j in range(i+1, n):
+            d1 = np.array([coordx[i],coordy[i]])
+            d2 = np.array([coordx[j],coordy[j]])
+            D[i, j] = np.linalg.norm(d1 - d2) + 1
+            D[j, i] = D[i, j]
+    return D, coordx, coordy
 
 class AssignmentGame:
     def __init__(self, 
                  transporter : Transporter = None,
                  grid_size : int = 12,
-                 hub : int = 100,
+                 hub : int = 0,
                  seed = None,
                  max_capacity = 15,
                  horizon = 1_000,
@@ -51,18 +66,20 @@ class AssignmentGame:
         self.info = dict()
         
         self.grid_size = grid_size
-        self.hub = hub
+        if not hub:
+            self.hub = grid_size**2//2
         self.transporters_vehicles_colors = ('lightcoral', 'lightgreen', 'lightyellow', 'lightblues')
         
-        self.G = nx.grid_2d_graph(grid_size, grid_size)
-        distances = {
-            e : {
-                'distance' : np.random.binomial(12, 0.1)+1
-            }
-            for e in self.G.edges
-        }
-        nx.set_edge_attributes(self.G, distances)
-        self.distance_matrix = nx.floyd_warshall_numpy(self.G, weight = 'distance')
+        # self.G = nx.grid_2d_graph(grid_size, grid_size)
+        # distances = {
+        #     e : {
+        #         'distance' : np.random.binomial(12, 0.1)+1
+        #     }
+        #     for e in self.G.edges
+        # }
+        # nx.set_edge_attributes(self.G, distances)
+        # self.distance_matrix, , coordx, self.coordy = nx.floyd_warshall_numpy(self.G, weight = 'distance')
+        self.distance_matrix, self.coordx, self.coordy = generate_D(grid_size**2, grid_size)
         self.time_matrix = self.distance_matrix/40 #In cities, the average speed is 40 km/h
         
         
@@ -376,7 +393,9 @@ class AssignmentGame:
         # super().reset(seed=seed)
         if packages is None:
             destinations = np.sort(np.random.choice(
-                [i for i,_ in enumerate(self.G.nodes) if i!=self.hub], size=self.num_packages, replace=False
+                [i for i in range(len(self.distance_matrix)) if i!=self.hub], 
+                size=self.num_packages, 
+                replace=False
             ))
 
             self.packages = [
