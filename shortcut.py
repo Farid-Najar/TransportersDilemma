@@ -98,7 +98,7 @@ def value(value_tables, coeff, types, sol, excess):
         pol += value_tables[i][sol[i]]*coeff[i]
     # print('gain : ', gain)
     # print('pol : ', pol)
-    return gain if pol >= excess else 0.
+    return gain if pol - excess >= -1e-5 else 0.
 
 @njit
 def best_combination(k, types, current_type, value_tables, max_omitted,coeff, excess, sol, max_val, max_sol):
@@ -111,7 +111,8 @@ def best_combination(k, types, current_type, value_tables, max_omitted,coeff, ex
             return #not a possible solution
         sol[current_type] = k - total
         val = value(value_tables,coeff,types,sol,excess)
-        #print("value : %f \n",val)
+        # print(sol, val)
+        # print("value : %f \n",val)
         if (val > max_val[0]):
             max_val[0] = val
             # print('max val : ', max_val)
@@ -153,10 +154,16 @@ def get_solution_multiple_types(sol, max_sol, routes, types):
     return solution
     
 @njit
-def multi_types(cost_matrix, routes, coeff, excess):
+def multi_types(cost_matrix, rtes, coef, excess):
+    
+    selection = np.where(coef > 0)[0]
+    
+    routes = rtes[selection]
+    coeff  = coef[selection]
+    
     types = len(routes)
     K = len(routes[0])-2
-   
+    
     #types is the number of types (and thus of tour and coeff)
 
      #problem here plutot une liste de tableau qui peuvent avoir des tailles différentes
@@ -167,14 +174,14 @@ def multi_types(cost_matrix, routes, coeff, excess):
     #weight = coeff/np.sum(coeff)
     
     value_tables = []#List()
-    # print('excess/coeff : ', excess/(coeff+1e-10))
+    # print('excess/coeff : ', excess/coeff)
     
     for i in range(types):
-        sol[i], values[i], max_omitted[i] = compute_smallest_cost(cost_matrix, routes[i], excess/(coeff[i]+1e-10))
+        sol[i], values[i], max_omitted[i] = compute_smallest_cost(cost_matrix, routes[i], excess/coeff[i])
         #extract the best combination of omission between the different types
         value_tables.append(values[i, :max_omitted[i]+1, -1])
 
-
+    # print('value tables : ', value_tables)
         # print(values[i, 1])
         # print(values[i, 1, -1])
     # print("taille des routes")

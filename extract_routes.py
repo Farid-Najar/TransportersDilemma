@@ -81,12 +81,10 @@ def create_routes(env : AssignmentEnv, nb_routes = 5_000, retain_rate = 0., time
         destinations[i] = d['d']
         
     
-    for i in range(len(destinations)):
-        if i >= len(destinations):
-            break
-        if len(destinations[i]) != len(set(destinations[i])):
-            destinations = np.delete(destinations, i, 0)
-            routes = np.delete(routes, i, 0)
+    delete = [l for l in range(len(destinations)) if len(destinations[l]) != len(set(destinations[l]))]
+    
+    destinations = np.delete(destinations, delete, 0)
+    routes = np.delete(routes, delete, 0)
 
     destinations = destinations[:1000]
     routes = routes[:1000]
@@ -299,21 +297,45 @@ def test():
     
 
 if __name__ == '__main__':
-    g = AssignmentGame(
-            grid_size=12,
-            max_capacity=25,
-            Q = 25,
-            K=50,
-            emissions_KM = [0., .1, .3, .3],
-            costs_KM = [1, 1, 1, 1],
-            seed=42
-        )
-    env = AssignmentEnv(g)
-    create_routes(env, 1000, time_budget=60, retain_rate=.8)
-    
     # g = AssignmentGame(
     #         grid_size=12,
     #         max_capacity=25,
+    #         Q = 25,
+    #         K=50,
+    #         emissions_KM = [0., .1, .3, .3],
+    #         costs_KM = [1, 1, 1, 1],
+    #         seed=42
+    #     )
+    # env = AssignmentEnv(g)
+    # create_routes(env, 1050, time_budget=60, retain_rate=.8)
+    
+    g = AssignmentGame(
+            grid_size=12,
+            max_capacity=10,
+            Q = 10,
+            K=30,
+            emissions_KM = [0., .1, .3],
+            costs_KM = [1, 1, 1],
+            seed=42
+        )
+    env = AssignmentEnv(g)
+    create_routes(env, 1050, time_budget=10)
+    
+    # g = AssignmentGame(
+    #         grid_size=12,
+    #         max_capacity=15,
+    #         Q = 25,
+    #         K=50,
+    #         emissions_KM = [0., .1, .3, .3],
+    #         costs_KM = [1, 1, 1, 1],
+    #         seed=42
+    #     )
+    # env = AssignmentEnv(g)
+    # create_routes(env, 1050, time_budget=60)
+    
+    # g = AssignmentGame(
+    #         grid_size=12,
+    #         max_capacity=15,
     #         Q = 40,
     #         K=100,
     #         emissions_KM = [0., .1, .3, .3],
@@ -321,7 +343,7 @@ if __name__ == '__main__':
     #         seed=42
     #     )
     # env = AssignmentEnv(g)
-    # create_routes(env, 1000, time_budget=60)
+    # create_routes(env, 1050, time_budget=60)
     
     # g = AssignmentGame(
     #         grid_size=12,
@@ -337,7 +359,19 @@ if __name__ == '__main__':
     # # # create_labels()
     # # # create_x()
     # # # test()
-    # create_quantities(1100, time_budget=10)
+    # create_quantities(1100, time_budget=30)
+    
+    # g = AssignmentGame(
+    #         grid_size=20,
+    #         max_capacity=50,
+    #         Q = 75,
+    #         K=250,
+    #         emissions_KM = [0., .1, .1, .3, .3],
+    #         costs_KM = [1, 1, 1, 1, 1],
+    #         seed=42
+    #     )
+    # env = AssignmentEnv(g)
+    # create_routes(env, 1050, time_budget=100)
     
     # g = AssignmentGame(
     #         grid_size=12,

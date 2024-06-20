@@ -49,7 +49,10 @@ def LRI(pi, a, r, m, M, b = 3e-3, *args, **kwargs):
 def EXP3(w, pi, a, r, mu, N, t, gamma = 0.1, *args, **kwargs):
     # global w
     r = 1 + r/2
-    assert r>=0 and r<=1
+    if not(r>=0 and r<=1):
+        r = np.clip(r, 0, 1)
+        print(f'r  : {r}')
+    # assert r>=0 and r<=1, f'r  : {r}'
     K = len(pi)
     x = r/pi[a]
     w[a] *= np.exp(gamma*x/(K*np.sqrt(t)))
@@ -102,12 +105,12 @@ def GameLearning(env : AssignmentEnv, strategy = LRI, T = 1_000, log = True):
     res = dict()
     # res['actions_hist'] = [best]
     res['rewards'] = np.zeros(T+1)
-    nrmlz = env.K*env.omission_cost
+    nrmlz = np.sum(env.quantities)*env.omission_cost
     res['rewards'][0] = float(done)*(nrmlz + info['r'])/nrmlz
     
     res['infos'] = []
     
-    best_reward = float(done)*(nrmlz + info['r'])/nrmlz
+    best_reward = res['rewards'][0]
     
     for t in tqdm(range(T)):
         
@@ -122,10 +125,10 @@ def GameLearning(env : AssignmentEnv, strategy = LRI, T = 1_000, log = True):
         for i in range(len(players)):
             players[i].update(actions[i], -loss[i])
             
-        res['rewards'][t+1] = (nrmlz + info['r'])/nrmlz
+        res['rewards'][t+1] = float(done)*(nrmlz + info['r'])/nrmlz
         
-        if float(done)*(nrmlz + info['r'])/nrmlz> best_reward:
-            best_reward = float(done)*(nrmlz + info['r'])/nrmlz
+        if res['rewards'][t+1]> best_reward:
+            best_reward = res['rewards'][t+1]
             best = actions.copy()
             res['infos'].append(info)
         if t%20 == 0 and log:
@@ -140,7 +143,8 @@ def GameLearning(env : AssignmentEnv, strategy = LRI, T = 1_000, log = True):
     return res
             
             
-def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50, log = True, tsp = False, comment = ''):
+def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50, log = True, tsp = False, 
+                        comment = '', n_threads=5):
 
 
     def process(env, q, i):
@@ -153,28 +157,40 @@ def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50,
     q = mp.Manager().Queue()
     res = dict()
     ps = []
-    with open(f'TransportersDilemma/RL/game_K{K}.pkl', 'rb') as f:
-        g = pickle.load(f)
-    routes = np.load(f'TransportersDilemma/RL/routes_K{K}.npy')
-    dests = np.load(f'TransportersDilemma/RL/destinations_K{K}.npy')
-
-    # with open(f'game_K{K}.pkl', 'rb') as f:
-    #     g = pickle.load(f)
-    # routes = np.load(f'routes_K{K}.npy')
-    # dests = np.load(f'destinations_K{K}.npy')
-    if tsp:
-        env = GameEnv(AssignmentEnv(g, routes, dests, 'game'))
-    else:
-        env = AssignmentEnv(g, routes, dests, 'game')
-    
-    for i in range(n_simulation):
-        env.reset()
-        # threads.append(Thread(target = process, args = (game, res[i])))
-        ps.append(mp.Process(target = process, args = (deepcopy(env), q, i,)))
-        ps[i].start()
+    if K == 20:
+        with open(f'TransportersDilemma/RL/game_K{K}_retain1.0.pkl', 'rb') as f:
+            g = pickle.load(f)
+        routes = np.load(f'TransportersDilemma/RL/routes_K{K}_retain1.0.npy')
+        dests = np.load(f'TransportersDilemma/RL/destinations_K{K}_retain1.0.npy')
+        qs = np.load(f'TransportersDilemma/RL/quantities_K{K}_retain1.0.npy')
         
-    for i in range(n_simulation):
-        ps[i].join()
+        if tsp:
+            env = GameEnv(AssignmentEnv(game=g, saved_routes=routes, saved_dests=dests, saved_q=qs, obs_mode='game'))
+        else:
+            env = AssignmentEnv(game=g, saved_routes=routes, saved_dests=dests, saved_q=qs, obs_mode='game')
+
+    else:
+        with open(f'TransportersDilemma/RL/game_K{K}.pkl', 'rb') as f:
+            g = pickle.load(f)
+        routes = np.load(f'TransportersDilemma/RL/routes_K{K}.npy')
+        dests = np.load(f'TransportersDilemma/RL/destinations_K{K}.npy')
+
+        if tsp:
+            env = GameEnv(AssignmentEnv(game=g, saved_routes=routes, saved_dests=dests, obs_mode='game'))
+        else:
+            env = AssignmentEnv(game=g, saved_routes=routes, saved_dests=dests, obs_mode='game')
+    
+    for i in range(n_simulation//n_threads):
+        # threads.append(Thread(target = process, args = (game, res[i])))
+        for j in range(n_threads):
+            _, info = env.reset()
+            ps.append(mp.Process(target = process, args = (deepcopy(env), q, i*n_threads+j,)))
+            ps[i*n_threads+j].start()
+        for j in range(n_threads):
+            ps[i*n_threads+j].join()
+        print(f'{i*n_threads+j} done')
+    # for p in ps:
+    #     p.join()
         
     while not q.empty():
         i, d = q.get()
@@ -183,40 +199,73 @@ def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50,
     with open(f"res_GameLearning_{strategy.__name__}_K{K}_n{n_simulation}{comment}.pkl","wb") as f:
         pickle.dump(res, f)
     
-    rewards = np.array([
-        res[i]['rewards']
-        for i in res.keys()
-    ])
-    r_min = np.amin(rewards, axis=0)
-    r_max = np.amax(rewards, axis=0)
-    r_mean = np.mean(rewards, axis=0)
-    std = np.std(rewards, axis=0) / np.sqrt(len(rewards))
-    r_median = np.median(rewards, axis=0)
+    # rewards = np.array([
+    #     res[i]['rewards']
+    #     for i in res.keys()
+    # ])
+    # r_min = np.amin(rewards, axis=0)
+    # r_max = np.amax(rewards, axis=0)
+    # r_mean = np.mean(rewards, axis=0)
+    # std = np.std(rewards, axis=0) / np.sqrt(len(rewards))
+    # r_median = np.median(rewards, axis=0)
 
-    # fig, ax = plt.subplots(2, 1)
-    # plt.plot(r_min, linestyle=':', label='min rewards', color='black')
-    plt.plot(r_mean, label='mean rewards')
-    # plt.plot(r_median, label='median rewards', linestyle='--', color='black')
-    # plt.plot(r_max, label='max rewards', linestyle='-.', color='black')
-    plt.fill_between(range(len(r_mean)), r_mean - 2*std, r_mean + 2*std, alpha=0.3, label="mean $\pm 2\sigma$")
-    plt.fill_between(range(len(r_mean)), r_mean - std, r_mean + std, alpha=0.7, label="mean $\pm \sigma$")
-    plt.title(f'Rewards in {strategy.__name__}')
-    plt.xlabel("Time $t$")
-    plt.legend()
-    plt.show()
+    # # fig, ax = plt.subplots(2, 1)
+    # # plt.plot(r_min, linestyle=':', label='min rewards', color='black')
+    # plt.plot(r_mean, label='mean rewards')
+    # # plt.plot(r_median, label='median rewards', linestyle='--', color='black')
+    # # plt.plot(r_max, label='max rewards', linestyle='-.', color='black')
+    # plt.fill_between(range(len(r_mean)), r_mean - 2*std, r_mean + 2*std, alpha=0.3, label="mean $\pm 2\sigma$")
+    # plt.fill_between(range(len(r_mean)), r_mean - std, r_mean + std, alpha=0.7, label="mean $\pm \sigma$")
+    # plt.title(f'Rewards in {strategy.__name__}')
+    # plt.xlabel("Time $t$")
+    # plt.legend()
+    # plt.show()
     
     # sol = res['solution']
     # print('solution : ', sol)
     
 if __name__ == '__main__' :
-    K = 100
-    make_different_sims(K = K, strategy = LRI, n_simulation=50, T=50_000, log=False, tsp=True, comment = 'randomStart')
+    # K = 50
+    # make_different_sims(K = K, strategy = LRI, n_simulation=100, T=10_000, log=False, tsp=True, comment = '_tsp')
+    # make_different_sims(K = K, strategy = LRI, n_simulation=100, T=10_000, log=False, tsp=False, comment = '_vrp')
+    # make_different_sims(K = K, strategy = EXP3, n_simulation=100, T=10_000, log=False, tsp=True, comment = '_tsp')
+    # make_different_sims(K = K, strategy = EXP3, n_simulation=100, T=10_000, log=False, tsp=False, comment = '_vrp')
+    
+    # K = 100
+    # make_different_sims(K = K, strategy = LRI, n_simulation=100, T=15_000, log=False, tsp=True, comment = '_tsp')
+    # make_different_sims(K = K, strategy = LRI, n_simulation=100, T=15_000, log=False, tsp=False, comment = '_vrp')
+    # make_different_sims(K = K, strategy = EXP3, n_simulation=100, T=15_000, log=False, tsp=True, comment = '_tsp')
+    # make_different_sims(K = K, strategy = EXP3, n_simulation=100, T=15_000, log=False, tsp=False, comment = '_vrp')
+    
+    K = 20
+    # make_different_sims(K = K, strategy = LRI, n_simulation=100, T=10_000, log=False, tsp=True, comment = '_tsp')
+    # # make_different_sims(K = K, strategy = LRI, n_simulation=100, T=10_000, log=False, tsp=False, comment = '_vrp')
+    make_different_sims(K = K, strategy = EXP3, n_simulation=100, T=10_000, log=False, tsp=True, comment = '_tsp')
+    # K = 30
+    # make_different_sims(K = K, strategy = EXP3, n_simulation=100, T=10_000, log=False, tsp=True, comment = '_tsp')
+    # make_different_sims(K = K, strategy = EXP3, n_simulation=100, T=10_000, log=False, tsp=False, comment = '_vrp')
     # game = AssignmentEnv(obs_mode='game')
     # game.reset()
-    # with open(f'TransportersDilemma/RL/game_K{K}.pkl', 'rb') as f:
+    # with open(f'TransportersDilemma/RL/game_K{K}_retain1.0.pkl', 'rb') as f:
     #     g = pickle.load(f)
-    # routes = np.load(f'TransportersDilemma/RL/routes_K{K}.npy')
-    # dests = np.load(f'TransportersDilemma/RL/destinations_K{K}.npy')
-    # env = AssignmentEnv(g, routes, dests, 'game')
-    # env.reset()
-    # GameLearning(env, strategy=EXP3)
+    # routes = np.load(f'TransportersDilemma/RL/routes_K{K}_retain1.0.npy')
+    # dests = np.load(f'TransportersDilemma/RL/destinations_K{K}_retain1.0.npy')
+    # qs = np.load(f'TransportersDilemma/RL/quantities_K{K}_retain1.0.npy')
+    # env = GameEnv(AssignmentEnv(game=deepcopy(g), saved_routes=routes, saved_dests=dests, saved_q=qs, obs_mode='game', instance_id=37, change_instance=False))
+    
+    # # with open(f'TransportersDilemma/RL/game_K{K}.pkl', 'rb') as f:
+    # #     g = pickle.load(f)
+    # # routes = np.load(f'TransportersDilemma/RL/routes_K{K}.npy')
+    # # dests = np.load(f'TransportersDilemma/RL/destinations_K{K}.npy')
+    # # env = GameEnv(AssignmentEnv(game=deepcopy(g), saved_routes=routes, saved_dests=dests, obs_mode='game', instance_id=1, change_instance=False))
+    # _, info = env.reset()
+    # # env.render()
+    # print(info)
+    # action = np.array([0, 1, 0, 0 ,0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3])
+    # # action = np.zeros(K, dtype=int)
+    # # print(np.sum(env._env.quantities[np.where(action==0)[0]]))
+    # *_, info = env.step(action)
+    # nrmlz = env.K*env.omission_cost
+    # print(info)
+    # print((nrmlz + info['r'])/nrmlz)
+    # env.render()
