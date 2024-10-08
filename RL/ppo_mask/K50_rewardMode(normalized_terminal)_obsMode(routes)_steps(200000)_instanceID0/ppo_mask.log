@@ -5,8 +5,8 @@ INFO - root :
 
             Environment information :
 
-            Grid size = 15
-            Q = 25
+            Grid size = 12
+            Q = 20
             K = 50
             n_vehicles = 4
              
@@ -16,7 +16,7 @@ Number of CPUs = 8
 
 INFO - root :
 the model parameters :
- {'policy_class': <class 'sb3_contrib.common.maskable.policies.MaskableActorCriticPolicy'>, 'device': device(type='cpu'), 'verbose': 1, 'policy_kwargs': {'activation_fn': <class 'torch.nn.modules.activation.ReLU'>, 'share_features_extractor': True, 'net_arch': [2048, 2048, 1024, 512]}, 'num_timesteps': 0, '_total_timesteps': 0, '_num_timesteps_at_start': 0, 'seed': None, 'action_noise': None, 'start_time': 0.0, 'learning_rate': 0.0003, 'tensorboard_log': '/Users/faridounet/PhD/TransportersDilemma/RL/ppo_mask/K50_rewardMode(normalized_terminal)_obsMode(routes)_steps(200000)_instanceID0/', '_last_obs': None, '_last_episode_starts': None, '_last_original_obs': None, '_episode_num': 0, 'use_sde': False, 'sde_sample_freq': -1, '_current_progress_remaining': 1.0, '_stats_window_size': 100, 'ep_info_buffer': None, 'ep_success_buffer': None, '_n_updates': 0, '_custom_logger': False, 'env': <stable_baselines3.common.vec_env.vec_monitor.VecMonitor object at 0x105233d30>, '_vec_normalize_env': None, 'observation_space': Box(0.0, 1.0, (217,), float64), 'action_space': Discrete(50), 'n_envs': 8, 'n_steps': 256, 'gamma': 0.99, 'gae_lambda': 0.95, 'ent_coef': 0.0, 'vf_coef': 0.5, 'max_grad_norm': 0.5, 'batch_size': 2048, 'n_epochs': 10, 'clip_range': <function constant_fn.<locals>.func at 0x16a08a4d0>, 'clip_range_vf': None, 'normalize_advantage': True, 'target_kl': None, 'lr_schedule': <function constant_fn.<locals>.func at 0x16a08a440>, 'policy': MaskableActorCriticPolicy(
+ {'policy_class': <class 'sb3_contrib.common.maskable.policies.MaskableActorCriticPolicy'>, 'device': device(type='cpu'), 'verbose': 1, 'policy_kwargs': {'activation_fn': <class 'torch.nn.modules.activation.ReLU'>, 'share_features_extractor': True, 'net_arch': [4096, 2048, 2048, 1024, 512]}, 'num_timesteps': 0, '_total_timesteps': 0, '_num_timesteps_at_start': 0, 'seed': None, 'action_noise': None, 'start_time': 0.0, 'learning_rate': 0.0003, 'tensorboard_log': '/Users/faridounet/PhD/TransportersDilemma/RL/ppo_mask/K50_rewardMode(normalized_terminal)_obsMode(routes)_steps(200000)_instanceID0/', '_last_obs': None, '_last_episode_starts': None, '_last_original_obs': None, '_episode_num': 0, 'use_sde': False, 'sde_sample_freq': -1, '_current_progress_remaining': 1.0, '_stats_window_size': 100, 'ep_info_buffer': None, 'ep_success_buffer': None, '_n_updates': 0, '_custom_logger': False, 'env': <stable_baselines3.common.vec_env.vec_monitor.VecMonitor object at 0x1054528c0>, '_vec_normalize_env': None, 'observation_space': Box(0.0, 1.0, (233,), float64), 'action_space': Discrete(50), 'n_envs': 8, 'n_steps': 256, 'gamma': 0.99, 'gae_lambda': 0.95, 'ent_coef': 0.0, 'vf_coef': 0.5, 'max_grad_norm': 0.5, 'rollout_buffer_class': None, 'rollout_buffer_kwargs': {}, 'batch_size': 2048, 'n_epochs': 10, 'clip_range': <function constant_fn.<locals>.func at 0x310b39fc0>, 'clip_range_vf': None, 'normalize_advantage': True, 'target_kl': None, 'lr_schedule': <function constant_fn.<locals>.func at 0x310b39ea0>, 'policy': MaskableActorCriticPolicy(
   (features_extractor): FlattenExtractor(
     (flatten): Flatten(start_dim=1, end_dim=-1)
   )
@@ -28,35 +28,39 @@ the model parameters :
   )
   (mlp_extractor): MlpExtractor(
     (policy_net): Sequential(
-      (0): Linear(in_features=217, out_features=2048, bias=True)
+      (0): Linear(in_features=233, out_features=4096, bias=True)
       (1): ReLU()
-      (2): Linear(in_features=2048, out_features=2048, bias=True)
+      (2): Linear(in_features=4096, out_features=2048, bias=True)
       (3): ReLU()
-      (4): Linear(in_features=2048, out_features=1024, bias=True)
+      (4): Linear(in_features=2048, out_features=2048, bias=True)
       (5): ReLU()
-      (6): Linear(in_features=1024, out_features=512, bias=True)
+      (6): Linear(in_features=2048, out_features=1024, bias=True)
       (7): ReLU()
+      (8): Linear(in_features=1024, out_features=512, bias=True)
+      (9): ReLU()
     )
     (value_net): Sequential(
-      (0): Linear(in_features=217, out_features=2048, bias=True)
+      (0): Linear(in_features=233, out_features=4096, bias=True)
       (1): ReLU()
-      (2): Linear(in_features=2048, out_features=2048, bias=True)
+      (2): Linear(in_features=4096, out_features=2048, bias=True)
       (3): ReLU()
-      (4): Linear(in_features=2048, out_features=1024, bias=True)
+      (4): Linear(in_features=2048, out_features=2048, bias=True)
       (5): ReLU()
-      (6): Linear(in_features=1024, out_features=512, bias=True)
+      (6): Linear(in_features=2048, out_features=1024, bias=True)
       (7): ReLU()
+      (8): Linear(in_features=1024, out_features=512, bias=True)
+      (9): ReLU()
     )
   )
   (action_net): Linear(in_features=512, out_features=50, bias=True)
   (value_net): Linear(in_features=512, out_features=1, bias=True)
-), 'rollout_buffer': <sb3_contrib.common.maskable.buffers.MaskableRolloutBuffer object at 0x16a118880>} 
+), 'rollout_buffer': <sb3_contrib.common.maskable.buffers.MaskableRolloutBuffer object at 0x310b4fbe0>} 
 
 INFO - root :
 Before training :
- mean, std = 0.22743897140026093, 0.009329521097242832 
+ mean, std = 0.256969690322876, 0.0 
 
 INFO - root :
 After training :
- mean, std = 0.7319480180740356, 5.960464477539063e-08 
+ mean, std = 0.7890909910202026, 5.960464477539063e-08 
 
