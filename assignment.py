@@ -20,6 +20,14 @@ class Package:
     origin : int = 0
     quantity : int = 1
     
+    
+def load_data():
+    coordx = np.load('coordsX.npy')
+    coordy = np.load('coordsY.npy')
+    D = np.load('distance_matrix.npy')
+    probs = np.load('prob_dests.npy')
+    
+    return D, coordx, coordy, probs
 
 @njit(parallel = True)
 def generate_D(n, grid_size):
@@ -38,7 +46,8 @@ def generate_D(n, grid_size):
 class AssignmentGame:
     def __init__(self, 
                  transporter : Transporter = None,
-                 grid_size : int = 12,
+                 grid_size : int = 12, # If there is no real data
+                 real_data : bool = False,
                  hub : int = 0,
                  seed = None,
                  max_capacity = 15,
@@ -48,7 +57,7 @@ class AssignmentGame:
                  costs_KM = [4, 4, 4, 4],
                  CO2_penalty = 10_000,
                  K = 50,
-                 Q = 25,
+                 Q = 40,
                  ):
         
         # if np.all(np.array(transporters_hubs) >= size**2):
@@ -67,20 +76,21 @@ class AssignmentGame:
         self.info = dict()
         
         self.grid_size = grid_size
-        if not hub:
-            self.hub = grid_size**2//2
+        # if not hub:
+        #     self.hub = grid_size**2//2
+        self.hub = hub
         self.transporters_vehicles_colors = ('lightcoral', 'lightgreen', 'lightyellow', 'lightblues')
         
-        # self.G = nx.grid_2d_graph(grid_size, grid_size)
-        # distances = {
-        #     e : {
-        #         'distance' : np.random.binomial(12, 0.1)+1
-        #     }
-        #     for e in self.G.edges
-        # }
-        # nx.set_edge_attributes(self.G, distances)
-        # self.distance_matrix, , coordx, self.coordy = nx.floyd_warshall_numpy(self.G, weight = 'distance')
-        self.distance_matrix, self.coordx, self.coordy = generate_D(grid_size**2, grid_size)
+        self.real_data = real_data
+        if real_data:
+            self.distance_matrix, self.coordx, self.coordy, self.prob_dests = load_data()
+            self.prob_dests += self.prob_dests[self.hub]/(len(self.prob_dests)-1)
+            self.prob_dests[self.hub] = 0
+            
+            # self.orders = np.setdiff1d(self.orders, self.hub)
+        else:
+            self.distance_matrix, self.coordx, self.coordy = generate_D(grid_size**2, grid_size)
+            
         self.time_matrix = self.distance_matrix/40 #In cities, the average speed is 40 km/h
         
         
@@ -353,34 +363,6 @@ class AssignmentGame:
         return total_costs + max(0, total_emissions - self.Q)*self.CO2_penalty + omission_penalty
         
     
-    # def _get_state(self, random_qantity=False):
-    #     # print('ids are : ', self.ids)
-    #     if self.t == 0:
-    #         self.obs = {
-    #             i : np.zeros(5)
-    #             for i in self.ids
-    #         }
-        
-    #     # The destination of the client
-    #     # node = self.available_nodes.pop(np.random.randint(len(self.available_nodes)))
-        
-    #     #Compute the manhattan distance between the hubs and the destination
-    #     # position_node = np.array([node//self.size, node%self.size]) 
-
-    #     # compute the quantity
-    #     if random_qantity :
-    #         quantity = np.random.randint(self.max_capacity)
-    #     else:
-    #         quantity = 1
-            
-    #     #Construct the state
-    #     for i in self.obs.keys():
-    #         self.obs[i][0] = self.t
-    #         # self.obs[i][self.t] = node
-    #         self.obs[i][-3] = quantity
-
-    #     return self.obs
-    
     
     def reset(self, packages = None, seed = None):
         
@@ -393,11 +375,19 @@ class AssignmentGame:
             
         # super().reset(seed=seed)
         if packages is None:
-            destinations = np.sort(np.random.choice(
-                [i for i in range(len(self.distance_matrix)) if i!=self.hub], 
-                size=self.num_packages, 
-                replace=False
-            ))
+            if self.real_data:
+                destinations = np.sort(np.random.choice(
+                    range(len(self.prob_dests)), 
+                    size=self.num_packages, 
+                    replace=False,
+                    p=self.prob_dests
+                ))
+            else:
+                destinations = np.sort(np.random.choice(
+                    [i for i in range(len(self.distance_matrix)) if i!=self.hub], 
+                    size=self.num_packages, 
+                    replace=False
+                ))
 
             self.packages = [
                 Package(
@@ -718,7 +708,7 @@ class AssignmentEnv(gym.Env):
             print(self.destinations)
             print([item for item, count in collections.Counter(self.destinations).items() if count > 1])
             assert False
-        assert (self.distance_matrix + np.eye(len(self.distance_matrix)) > 0).all()
+        assert (self.distance_matrix + np.eye(len(self.distance_matrix)) > 0).all()#, self.distance_matrix[np.where(self.distance_matrix + np.eye(len(self.distance_matrix)) <= 0)]
         self.costs_matrix = np.array([
             (self._game.costs_KM[m] + self._game.CO2_penalty*self._game.emissions_KM[m])*self.distance_matrix
             for m in range(len(self._game.costs_KM))
@@ -1039,7 +1029,7 @@ class RemoveActionEnv(gym.Env):
         # self.action = np.ones(self._env._game.num_packages, dtype=int)
         
         if action_mode == 'all_nodes':
-            self.action_mask = np.zeros(self._env._game.grid_size**2, dtype=bool)
+            self.action_mask = np.zeros(len(self._env._game.distance_matrix), dtype=bool)
             self.action_space = gym.spaces.Discrete(len(self.action_mask))
             if self._env.obs_mode == 'cost_matrix':
                 self.observation_space = self._env.observation_space
@@ -1083,7 +1073,7 @@ class RemoveActionEnv(gym.Env):
         
         self.destinations = np.array(self._env.destinations, dtype=np.int16)
         if self.action_mode == 'all_nodes':
-            self.action_mask = np.zeros(self._env._game.grid_size**2, dtype=bool)
+            self.action_mask = np.zeros(len(self._env._game.distance_matrix), dtype=bool)
             self.action_mask[self.destinations] = True
             if self._env.obs_mode != 'cost_matrix':
                 obs = self.action_mask.astype(int)
