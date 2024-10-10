@@ -144,8 +144,9 @@ def GameLearning(env : AssignmentEnv, strategy = LRI, T = 1_000, log = True):
             
             
 def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50, log = True, tsp = False, 
-                        comment = '', n_threads=5):
+                        comment = '', n_threads=5, real_data = False):
 
+    real = "real_" if real_data else ""
 
     def process(env, q, i):
         t0 = time()
@@ -158,11 +159,11 @@ def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50,
     res = dict()
     ps = []
     if K == 20:
-        with open(f'TransportersDilemma/RL/game_K{K}_retain1.0.pkl', 'rb') as f:
+        with open(f'TransportersDilemma/RL/{real}game_K{K}_retain1.0.pkl', 'rb') as f:
             g = pickle.load(f)
-        routes = np.load(f'TransportersDilemma/RL/routes_K{K}_retain1.0.npy')
-        dests = np.load(f'TransportersDilemma/RL/destinations_K{K}_retain1.0.npy')
-        qs = np.load(f'TransportersDilemma/RL/quantities_K{K}_retain1.0.npy')
+        routes = np.load(f'TransportersDilemma/RL/{real}routes_K{K}_retain1.0.npy')
+        dests = np.load(f'TransportersDilemma/RL/{real}destinations_K{K}_retain1.0.npy')
+        qs = np.load(f'TransportersDilemma/RL/{real}quantities_K{K}_retain1.0.npy')
         
         if tsp:
             env = GameEnv(AssignmentEnv(game=g, saved_routes=routes, saved_dests=dests, saved_q=qs, obs_mode='game'))
@@ -170,10 +171,10 @@ def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50,
             env = AssignmentEnv(game=g, saved_routes=routes, saved_dests=dests, saved_q=qs, obs_mode='game')
 
     else:
-        with open(f'TransportersDilemma/RL/game_K{K}.pkl', 'rb') as f:
+        with open(f'TransportersDilemma/RL/{real}game_K{K}.pkl', 'rb') as f:
             g = pickle.load(f)
-        routes = np.load(f'TransportersDilemma/RL/routes_K{K}.npy')
-        dests = np.load(f'TransportersDilemma/RL/destinations_K{K}.npy')
+        routes = np.load(f'TransportersDilemma/RL/{real}routes_K{K}.npy')
+        dests = np.load(f'TransportersDilemma/RL/{real}destinations_K{K}.npy')
 
         if tsp:
             env = GameEnv(AssignmentEnv(game=g, saved_routes=routes, saved_dests=dests, obs_mode='game'))
@@ -196,7 +197,7 @@ def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50,
         i, d = q.get()
         res[i] = d
     
-    with open(f"res_GameLearning_{strategy.__name__}_K{K}_n{n_simulation}{comment}.pkl","wb") as f:
+    with open(f"{real}res_GameLearning_{strategy.__name__}_K{K}_n{n_simulation}{comment}.pkl","wb") as f:
         pickle.dump(res, f)
     
     # rewards = np.array([

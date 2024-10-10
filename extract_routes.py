@@ -310,17 +310,17 @@ def test():
 if __name__ == '__main__':
     
     n = 200
-    # g = AssignmentGame(
-    #         real_data=True,
-    #         max_capacity=25,
-    #         Q = 800,
-    #         K=50,
-    #         emissions_KM = [0., .1, .3, .3],
-    #         costs_KM = [1, 1, 1, 1],
-    #         seed=42
-    #     )
-    # env = AssignmentEnv(g)
-    # create_routes(env, n, time_budget=60, retain_rate=.8)
+    g = AssignmentGame(
+            real_data=True,
+            max_capacity=25,
+            Q = 800,
+            K=50,
+            emissions_KM = [0., .1, .3, .3],
+            costs_KM = [1, 1, 1, 1],
+            seed=42
+        )
+    env = AssignmentEnv(g)
+    create_routes(env, n, time_budget=60, retain_rate=.8)
     
     g = AssignmentGame(
             real_data=True,

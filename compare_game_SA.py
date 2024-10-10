@@ -46,6 +46,7 @@ def EHEG(env, obs, *args, **kwargs):
 def compare(
     n_simulation = 1,
     # strategy = LRI,
+    real_data = False,
     T = 100_000,
     Q = None,
     K = 50,
@@ -57,23 +58,25 @@ def compare(
     retain = None,
     ):
     
+    real = "real_" if real_data else ""
+    
     if retain is None:
-        with open(f'TransportersDilemma/RL/game_K{K}.pkl', 'rb') as f:
+        with open(f'TransportersDilemma/RL/{real}game_K{K}.pkl', 'rb') as f:
             g = pickle.load(f)
-        routes = np.load(f'TransportersDilemma/RL/routes_K{K}.npy')
-        dests = np.load(f'TransportersDilemma/RL/destinations_K{K}.npy')
+        routes = np.load(f'TransportersDilemma/RL/{real}routes_K{K}.npy')
+        dests = np.load(f'TransportersDilemma/RL/{real}destinations_K{K}.npy')
     else:
-        with open(f'TransportersDilemma/RL/game_K{K}_retain{retain}.pkl', 'rb') as f:
+        with open(f'TransportersDilemma/RL/{real}game_K{K}_retain{retain}.pkl', 'rb') as f:
             g = pickle.load(f)
-        routes = np.load(f'TransportersDilemma/RL/routes_K{K}_retain{retain}.npy')
-        dests = np.load(f'TransportersDilemma/RL/destinations_K{K}_retain{retain}.npy')
+        routes = np.load(f'TransportersDilemma/RL/{real}routes_K{K}_retain{retain}.npy')
+        dests = np.load(f'TransportersDilemma/RL/{real}destinations_K{K}_retain{retain}.npy')
     if Q is not None:
         g.Q = Q
     
     if K == 20:
-        qs = np.load(f'TransportersDilemma/RL/quantities_K{K}_retain{retain}.npy')
+        qs = np.load(f'TransportersDilemma/RL/{real}quantities_K{K}_retain{retain}.npy')
     
-    np.random.seed(42)
+    np.random.seed(1917)
 
     def process_DP(env, i, q):
         t0 = time()
@@ -127,25 +130,25 @@ def compare(
         print(f'SA {i} done')
         return
         
-    def process_A(env, i, q):
-        t0 = time()
-        res = dict()
+    # def process_A(env, i, q):
+    #     t0 = time()
+    #     res = dict()
         
-        env.reset()
+    #     env.reset()
         
-        res_A = A_Star(deepcopy(env._env), max_time=20)
-        # res = baseline(game)
-        action_A = res_A['solution'].astype(int)
+    #     res_A = A_Star(deepcopy(env._env), max_time=20)
+    #     # res = baseline(game)
+    #     action_A = res_A['solution'].astype(int)
 
-        obs, info= env.reset()
-        a = np.where(action_A == 0)[0]
-        _, r_A, *_ = env.step(a)
-        res['time'] = time() - t0
-        res['sol'] = a
-        res['r'] = r_A
-        q.put((i, res))
-        print(f'baseline {i} done')
-        return
+    #     obs, info= env.reset()
+    #     a = np.where(action_A == 0)[0]
+    #     _, r_A, *_ = env.step(a)
+    #     res['time'] = time() - t0
+    #     res['sol'] = a
+    #     res['r'] = r_A
+    #     q.put((i, res))
+    #     print(f'baseline {i} done')
+    #     return
         
     def process_greedy(env, i, q):
         t0 = time()
@@ -292,7 +295,7 @@ def compare(
     }
     
     # with open(f"res_compare_baseline_greedy_SA_{strategy.__name__}_Q{Q}_K{K}_n{n_simulation}_T{T}.pkl","wb") as f:
-    with open(f"res_compare_EG_A*_SA_K{K}_n{n_simulation}.pkl","wb") as f:
+    with open(f"{real}res_compare_EG_A*_SA_K{K}_n{n_simulation}.pkl","wb") as f:
         pickle.dump(res, f)
     
     # r_DP = np.array([
@@ -391,6 +394,7 @@ def compare(
 def run_SA_TSP(
     n_simulation = 1,
     # strategy = LRI,
+    real_data = False,
     T = 100_000,
     Q = None,
     K = 50,
@@ -403,23 +407,25 @@ def run_SA_TSP(
     n_threads = 5
     ):
     
+    real = "real_" if real_data else ""
+    
     if retain is None:
-        with open(f'TransportersDilemma/RL/game_K{K}.pkl', 'rb') as f:
+        with open(f'TransportersDilemma/RL/{real}game_K{K}.pkl', 'rb') as f:
             g = pickle.load(f)
-        routes = np.load(f'TransportersDilemma/RL/routes_K{K}.npy')
-        dests = np.load(f'TransportersDilemma/RL/destinations_K{K}.npy')
+        routes = np.load(f'TransportersDilemma/RL/{real}routes_K{K}.npy')
+        dests = np.load(f'TransportersDilemma/RL/{real}destinations_K{K}.npy')
     else:
-        with open(f'TransportersDilemma/RL/game_K{K}_retain{retain}.pkl', 'rb') as f:
+        with open(f'TransportersDilemma/RL/{real}game_K{K}_retain{retain}.pkl', 'rb') as f:
             g = pickle.load(f)
-        routes = np.load(f'TransportersDilemma/RL/routes_K{K}_retain{retain}.npy')
-        dests = np.load(f'TransportersDilemma/RL/destinations_K{K}_retain{retain}.npy')
+        routes = np.load(f'TransportersDilemma/RL/{real}routes_K{K}_retain{retain}.npy')
+        dests = np.load(f'TransportersDilemma/RL/{real}destinations_K{K}_retain{retain}.npy')
     if Q is not None:
         g.Q = Q
     
     if K == 20:
-        qs = np.load(f'TransportersDilemma/RL/quantities_K{K}_retain{retain}.npy')
+        qs = np.load(f'TransportersDilemma/RL/{real}quantities_K{K}_retain{retain}.npy')
     
-    np.random.seed(42)
+    np.random.seed(1917)
 
     def process(env, i, q):
         t0 = time()
@@ -480,7 +486,7 @@ def run_SA_TSP(
     }
     
     # with open(f"res_compare_baseline_greedy_SA_{strategy.__name__}_Q{Q}_K{K}_n{n_simulation}_T{T}.pkl","wb") as f:
-    with open(f"res_SA_TSP_K{K}_n{n_simulation}.pkl","wb") as f:
+    with open(f"{real}res_SA_TSP_K{K}_n{n_simulation}.pkl","wb") as f:
         pickle.dump(res, f)
         
 def run_DP(

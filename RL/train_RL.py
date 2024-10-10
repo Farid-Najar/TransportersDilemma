@@ -481,6 +481,10 @@ if __name__ == '__main__':
                        help='the number of steps before an evaluation')
     parser.add_argument('--progress_bar', type=bool, default=False,
                        help='the progress bar appearance')
+    
+    parser.add_argument('--real_data', type=bool, default=True,
+                       help='the use of real data if True, synthetic data otherwise')
+    
     parser.add_argument('--gamma', type=float, default=0.99,
                        help='the discount factor gamma')
     
@@ -513,30 +517,31 @@ if __name__ == '__main__':
     # budget=budget, n_eval=25, save = True, save_path=save_dir
     # )
     comment = ''
+    real = "real_" if args.real_data else ""
     # if args.change_instance: assert False
     if not args.change_instance:
         comment += f'_instanceID{str(args.instance_id)}'
     if args.algo == 'ppo':
         train_algo = train_PPO
-        save_dir = str(path)+f'/ppo/K{args.K}_rewardMode({args.r_mode})_steps({args.steps})'+comment
+        save_dir = str(path)+f'/ppo/{real}K{args.K}_rewardMode({args.r_mode})_steps({args.steps})'+comment
     else:
         train_algo = train_PPO_mask
-        save_dir = str(path)+f'/ppo_mask/K{args.K}_rewardMode({args.r_mode})_obsMode({args.obs_mode})_steps({args.steps})'+comment
+        save_dir = str(path)+f'/ppo_mask/{real}K{args.K}_rewardMode({args.r_mode})_obsMode({args.obs_mode})_steps({args.steps})'+comment
     os.makedirs(save_dir, exist_ok=True)
     
 
     try:
         if args.load_game:
             if args.retain_rate is None:
-                with open(f'TransportersDilemma/RL/game_K{args.K}.pkl', 'rb') as f:
+                with open(f'TransportersDilemma/RL/{real}game_K{args.K}.pkl', 'rb') as f:
                     g = pickle.load(f)
-                routes = np.load(f'TransportersDilemma/RL/routes_K{args.K}.npy')
-                dests = np.load(f'TransportersDilemma/RL/destinations_K{args.K}.npy')
+                routes = np.load(f'TransportersDilemma/RL/{real}routes_K{args.K}.npy')
+                dests = np.load(f'TransportersDilemma/RL/{real}destinations_K{args.K}.npy')
             else:
-                with open(f'TransportersDilemma/RL/game_K{args.K}_retain{args.retain_rate}.pkl', 'rb') as f:
+                with open(f'TransportersDilemma/RL/{real}game_K{args.K}_retain{args.retain_rate}.pkl', 'rb') as f:
                     g = pickle.load(f)
-                routes = np.load(f'TransportersDilemma/RL/routes_K{args.K}_retain{args.retain_rate}.npy')
-                dests = np.load(f'TransportersDilemma/RL/destinations_K{args.K}_retain{args.retain_rate}.npy')
+                routes = np.load(f'TransportersDilemma/RL/{real}routes_K{args.K}_retain{args.retain_rate}.npy')
+                dests = np.load(f'TransportersDilemma/RL/{real}destinations_K{args.K}_retain{args.retain_rate}.npy')
         else:
             assert False
     except Exception as e:

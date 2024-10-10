@@ -1,5 +1,7 @@
 __pycache__
 .ipynb_checkpoints
-*.zip
+# *.zip
+Maskable*
 ppo
 ppo_mask
+real_game*.pkl
