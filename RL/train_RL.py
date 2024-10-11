@@ -7,7 +7,7 @@ path = Path(os.path.dirname(__file__))
 # pri&
 # caution: path[0] is reserved for script path (or '' in REPL)
 # print(str(path)+'/ppo')
-sys.path.insert(1, str(path.parent.absolute()))#'/Users/faridounet/PhD/TransportersDilemma')
+sys.path.insert(1, str(path.parent.absolute()))
 
 import argparse
 import pickle
@@ -533,15 +533,15 @@ if __name__ == '__main__':
     try:
         if args.load_game:
             if args.retain_rate is None:
-                with open(f'TransportersDilemma/RL/{real}game_K{args.K}.pkl', 'rb') as f:
+                with open(f'RL/{real}game_K{args.K}.pkl', 'rb') as f:
                     g = pickle.load(f)
-                routes = np.load(f'TransportersDilemma/RL/{real}routes_K{args.K}.npy')
-                dests = np.load(f'TransportersDilemma/RL/{real}destinations_K{args.K}.npy')
+                routes = np.load(f'RL/{real}routes_K{args.K}.npy')
+                dests = np.load(f'RL/{real}destinations_K{args.K}.npy')
             else:
-                with open(f'TransportersDilemma/RL/{real}game_K{args.K}_retain{args.retain_rate}.pkl', 'rb') as f:
+                with open(f'RL/{real}game_K{args.K}_retain{args.retain_rate}.pkl', 'rb') as f:
                     g = pickle.load(f)
-                routes = np.load(f'TransportersDilemma/RL/{real}routes_K{args.K}_retain{args.retain_rate}.npy')
-                dests = np.load(f'TransportersDilemma/RL/{real}destinations_K{args.K}_retain{args.retain_rate}.npy')
+                routes = np.load(f'RL/{real}routes_K{args.K}_retain{args.retain_rate}.npy')
+                dests = np.load(f'RL/{real}destinations_K{args.K}_retain{args.retain_rate}.npy')
         else:
             assert False
     except Exception as e:
@@ -618,10 +618,8 @@ if __name__ == '__main__':
     #     budget=30_000, n_eval=25, save = True, save_path=save_dir
     # )
     
-    # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 500000 --change_instance True
-    # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 100000  --obs_mode action --K 100
-    # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 1000000  --obs_mode multi --K 50 --change_instance True
-    # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 20000  --obs_mode multi --K 50
-    # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 100000 --K 100 --action_mode destinations
-    # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 1000001 --K 50 --retain_rate 0.8 --change_instance True
-    # /opt/homebrew/bin/python3.10 /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 1000001 --K 20 --retain_rate 1. --change_instance True --obs_mode routes
+    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 1000000  --obs_mode multi --K 50 --change_instance True
+    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 20000  --obs_mode multi --K 50
+    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 20000  --obs_mode multi --K 100
+    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 1000000 --K 50 --retain_rate 0.8 --change_instance True
+    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 1000000 --K 20 --retain_rate 1. --change_instance True --obs_mode routes

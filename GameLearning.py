@@ -51,7 +51,6 @@ def EXP3(w, pi, a, r, mu, N, t, gamma = 0.1, *args, **kwargs):
     r = 1 + r/2
     if not(r>=0 and r<=1):
         r = np.clip(r, 0, 1)
-        print(f'r  : {r}')
     # assert r>=0 and r<=1, f'r  : {r}'
     K = len(pi)
     x = r/pi[a]
@@ -159,11 +158,11 @@ def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50,
     res = dict()
     ps = []
     if K == 20:
-        with open(f'TransportersDilemma/RL/{real}game_K{K}_retain1.0.pkl', 'rb') as f:
+        with open(f'RL/{real}game_K{K}_retain1.0.pkl', 'rb') as f:
             g = pickle.load(f)
-        routes = np.load(f'TransportersDilemma/RL/{real}routes_K{K}_retain1.0.npy')
-        dests = np.load(f'TransportersDilemma/RL/{real}destinations_K{K}_retain1.0.npy')
-        qs = np.load(f'TransportersDilemma/RL/{real}quantities_K{K}_retain1.0.npy')
+        routes = np.load(f'RL/{real}routes_K{K}_retain1.0.npy')
+        dests = np.load(f'RL/{real}destinations_K{K}_retain1.0.npy')
+        qs = np.load(f'RL/{real}quantities_K{K}_retain1.0.npy')
         
         if tsp:
             env = GameEnv(AssignmentEnv(game=g, saved_routes=routes, saved_dests=dests, saved_q=qs, obs_mode='game'))
@@ -171,10 +170,10 @@ def make_different_sims(n_simulation = 1, strategy = LRI, T = 500, Q = 30, K=50,
             env = AssignmentEnv(game=g, saved_routes=routes, saved_dests=dests, saved_q=qs, obs_mode='game')
 
     else:
-        with open(f'TransportersDilemma/RL/{real}game_K{K}.pkl', 'rb') as f:
+        with open(f'RL/{real}game_K{K}.pkl', 'rb') as f:
             g = pickle.load(f)
-        routes = np.load(f'TransportersDilemma/RL/{real}routes_K{K}.npy')
-        dests = np.load(f'TransportersDilemma/RL/{real}destinations_K{K}.npy')
+        routes = np.load(f'RL/{real}routes_K{K}.npy')
+        dests = np.load(f'RL/{real}destinations_K{K}.npy')
 
         if tsp:
             env = GameEnv(AssignmentEnv(game=g, saved_routes=routes, saved_dests=dests, obs_mode='game'))

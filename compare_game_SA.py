@@ -59,22 +59,23 @@ def compare(
     ):
     
     real = "real_" if real_data else ""
+    retain_comment = f"_retain{retain}" if retain is not None else ""
     
     if retain is None:
-        with open(f'TransportersDilemma/RL/{real}game_K{K}.pkl', 'rb') as f:
+        with open(f'RL/{real}game_K{K}.pkl', 'rb') as f:
             g = pickle.load(f)
-        routes = np.load(f'TransportersDilemma/RL/{real}routes_K{K}.npy')
-        dests = np.load(f'TransportersDilemma/RL/{real}destinations_K{K}.npy')
+        routes = np.load(f'RL/{real}routes_K{K}.npy')
+        dests = np.load(f'RL/{real}destinations_K{K}.npy')
     else:
-        with open(f'TransportersDilemma/RL/{real}game_K{K}_retain{retain}.pkl', 'rb') as f:
+        with open(f'RL/{real}game_K{K}_retain{retain}.pkl', 'rb') as f:
             g = pickle.load(f)
-        routes = np.load(f'TransportersDilemma/RL/{real}routes_K{K}_retain{retain}.npy')
-        dests = np.load(f'TransportersDilemma/RL/{real}destinations_K{K}_retain{retain}.npy')
+        routes = np.load(f'RL/{real}routes_K{K}_retain{retain}.npy')
+        dests = np.load(f'RL/{real}destinations_K{K}_retain{retain}.npy')
     if Q is not None:
         g.Q = Q
     
     if K == 20:
-        qs = np.load(f'TransportersDilemma/RL/{real}quantities_K{K}_retain{retain}.npy')
+        qs = np.load(f'RL/{real}quantities_K{K}_retain{retain}.npy')
     
     np.random.seed(1917)
 
@@ -295,7 +296,7 @@ def compare(
     }
     
     # with open(f"res_compare_baseline_greedy_SA_{strategy.__name__}_Q{Q}_K{K}_n{n_simulation}_T{T}.pkl","wb") as f:
-    with open(f"{real}res_compare_EG_A*_SA_K{K}_n{n_simulation}.pkl","wb") as f:
+    with open(f"{real}res_compare_EG_A*_SA_K{K}_n{n_simulation}{retain_comment}.pkl","wb") as f:
         pickle.dump(res, f)
     
     # r_DP = np.array([
@@ -408,22 +409,23 @@ def run_SA_TSP(
     ):
     
     real = "real_" if real_data else ""
+    retain_comment = f"_retain{retain}" if retain is not None else ""
     
     if retain is None:
-        with open(f'TransportersDilemma/RL/{real}game_K{K}.pkl', 'rb') as f:
+        with open(f'RL/{real}game_K{K}.pkl', 'rb') as f:
             g = pickle.load(f)
-        routes = np.load(f'TransportersDilemma/RL/{real}routes_K{K}.npy')
-        dests = np.load(f'TransportersDilemma/RL/{real}destinations_K{K}.npy')
+        routes = np.load(f'RL/{real}routes_K{K}.npy')
+        dests = np.load(f'RL/{real}destinations_K{K}.npy')
     else:
-        with open(f'TransportersDilemma/RL/{real}game_K{K}_retain{retain}.pkl', 'rb') as f:
+        with open(f'RL/{real}game_K{K}_retain{retain}.pkl', 'rb') as f:
             g = pickle.load(f)
-        routes = np.load(f'TransportersDilemma/RL/{real}routes_K{K}_retain{retain}.npy')
-        dests = np.load(f'TransportersDilemma/RL/{real}destinations_K{K}_retain{retain}.npy')
+        routes = np.load(f'RL/{real}routes_K{K}_retain{retain}.npy')
+        dests = np.load(f'RL/{real}destinations_K{K}_retain{retain}.npy')
     if Q is not None:
         g.Q = Q
     
     if K == 20:
-        qs = np.load(f'TransportersDilemma/RL/{real}quantities_K{K}_retain{retain}.npy')
+        qs = np.load(f'RL/{real}quantities_K{K}_retain{retain}.npy')
     
     np.random.seed(1917)
 
@@ -486,226 +488,226 @@ def run_SA_TSP(
     }
     
     # with open(f"res_compare_baseline_greedy_SA_{strategy.__name__}_Q{Q}_K{K}_n{n_simulation}_T{T}.pkl","wb") as f:
-    with open(f"{real}res_SA_TSP_K{K}_n{n_simulation}.pkl","wb") as f:
+    with open(f"{real}res_SA_TSP_K{K}_n{n_simulation}{retain_comment}.pkl","wb") as f:
         pickle.dump(res, f)
         
-def run_DP(
-    n_simulation = 1,
-    # strategy = LRI,
-    T = 100_000,
-    # Q = 30,
-    K = 50,
-    T_init = 5_000,
-    T_limit = 1,
-    lamb = 0.9999,
-    log = False,
-    packages = None,
-    ):
+# def run_DP(
+#     n_simulation = 1,
+#     # strategy = LRI,
+#     T = 100_000,
+#     # Q = 30,
+#     K = 50,
+#     T_init = 5_000,
+#     T_limit = 1,
+#     lamb = 0.9999,
+#     log = False,
+#     packages = None,
+#     ):
 
-    def process_DP(env, i, q, excess):
-        t0 = time()
-        res = dict()
-        rtes = np.array([
-            [
-                env._env.initial_routes[m, i] 
-                for i in range(0, len(env._env.initial_routes[m]), 2)
-            ]
-            for m in range(len(env._env.initial_routes))
-        ], dtype=int)
-        # print(CM)
-        coeff = env._env._game.emissions_KM
-        # CM = np.array([
-        #     env._env.distance_matrix*coeff[i]
-        #     for i in range(len(coeff))
-        # ]).copy()
-        a = multi_types(env._env.distance_matrix, rtes, coeff, excess)
-        # a = dests[i_id][np.where(a_GTS == 0)].astype(int)
-        _, r_opt, *_ = env.step(a)
-        # res = GameLearning(game, T=T, strategy=strategy, log = log)
-        res['time'] = time() - t0
-        res['r'] = r_opt
-        q.put((i, res))
-        print(f'DP {i} done')
+#     def process_DP(env, i, q, excess):
+#         t0 = time()
+#         res = dict()
+#         rtes = np.array([
+#             [
+#                 env._env.initial_routes[m, i] 
+#                 for i in range(0, len(env._env.initial_routes[m]), 2)
+#             ]
+#             for m in range(len(env._env.initial_routes))
+#         ], dtype=int)
+#         # print(CM)
+#         coeff = env._env._game.emissions_KM
+#         # CM = np.array([
+#         #     env._env.distance_matrix*coeff[i]
+#         #     for i in range(len(coeff))
+#         # ]).copy()
+#         a = multi_types(env._env.distance_matrix, rtes, coeff, excess)
+#         # a = dests[i_id][np.where(a_GTS == 0)].astype(int)
+#         _, r_opt, *_ = env.step(a)
+#         # res = GameLearning(game, T=T, strategy=strategy, log = log)
+#         res['time'] = time() - t0
+#         res['r'] = r_opt
+#         q.put((i, res))
+#         print(f'DP {i} done')
         
-    q_DP = mp.Manager().Queue()
+#     q_DP = mp.Manager().Queue()
     
-    res_DP = dict()
+#     res_DP = dict()
     
-    ps = []
+#     ps = []
     
-    with open(f'TransportersDilemma/RL/game_K{K}_retain0.8.pkl', 'rb') as f:
-        g = pickle.load(f)
-    routes = np.load(f'TransportersDilemma/RL/routes_K{K}_retain0.8.npy')
-    dests = np.load(f'TransportersDilemma/RL/destinations_K{K}_retain0.8.npy')
+#     with open(f'RL/game_K{K}_retain0.8.pkl', 'rb') as f:
+#         g = pickle.load(f)
+#     routes = np.load(f'RL/routes_K{K}_retain0.8.npy')
+#     dests = np.load(f'RL/destinations_K{K}_retain0.8.npy')
 
-    env = RemoveActionEnv(game = g, saved_routes = routes, saved_dests=dests, 
-                obs_mode='elimination_gain', 
-                action_mode = 'destinations',
-                  change_instance = True, rewards_mode='normalized_terminal', instance_id = 0)
+#     env = RemoveActionEnv(game = g, saved_routes = routes, saved_dests=dests, 
+#                 obs_mode='elimination_gain', 
+#                 action_mode = 'destinations',
+#                   change_instance = True, rewards_mode='normalized_terminal', instance_id = 0)
 
-    for i in range(n_simulation):
-        # game = AssignmentGame(Q=Q, K = K)
-        obs, info= env.reset()
-        # threads.append(Thread(target = process, args = (game, res[i])))
-        ps.append(mp.Process(target = process_DP, args = (deepcopy(env), i, q_DP, info['excess_emission'], )))
-        # ps[i].start()
-        ps[i].start()
+#     for i in range(n_simulation):
+#         # game = AssignmentGame(Q=Q, K = K)
+#         obs, info= env.reset()
+#         # threads.append(Thread(target = process, args = (game, res[i])))
+#         ps.append(mp.Process(target = process_DP, args = (deepcopy(env), i, q_DP, info['excess_emission'], )))
+#         # ps[i].start()
+#         ps[i].start()
         
-    for i in range(n_simulation):
-        # ps[i].join()
-        ps[i].join()
+#     for i in range(n_simulation):
+#         # ps[i].join()
+#         ps[i].join()
         
-    print('all done !')
-    while not q_DP.empty():
-        i, d = q_DP.get()
-        res_DP[i] = d
+#     print('all done !')
+#     while not q_DP.empty():
+#         i, d = q_DP.get()
+#         res_DP[i] = d
     
     
-    # with open(f"res_compare_baseline_greedy_SA_{strategy.__name__}_Q{Q}_K{K}_n{n_simulation}_T{T}.pkl","wb") as f:
-    with open(f"res_DP_K{K}_n{n_simulation}.pkl","wb") as f:
-        pickle.dump(res_DP, f)
+#     # with open(f"res_compare_baseline_greedy_SA_{strategy.__name__}_Q{Q}_K{K}_n{n_simulation}_T{T}.pkl","wb") as f:
+#     with open(f"res_DP_K{K}_n{n_simulation}.pkl","wb") as f:
+#         pickle.dump(res_DP, f)
 
 
 
-def compare_SA_DP(
-    n_simulation = 1,
-    # strategy = LRI,
-    T = 100_000,
-    # Q = 30,
-    K = 50,
-    T_init = 5_000,
-    T_limit = 1,
-    lamb = 0.9999,
-    log = False,
-    packages = None,
-    ):
+# def compare_SA_DP(
+#     n_simulation = 1,
+#     # strategy = LRI,
+#     T = 100_000,
+#     # Q = 30,
+#     K = 50,
+#     T_init = 5_000,
+#     T_limit = 1,
+#     lamb = 0.9999,
+#     log = False,
+#     packages = None,
+#     ):
 
-    def process_DP(env, id, q, excess):
-        t0 = time()
-        res = dict()
-        rtes = np.array([
-            [
-                env._env.initial_routes[m, i] 
-                for i in range(0, len(env._env.initial_routes[m]), 2)
-            ]
-            for m in range(len(env._env.initial_routes))
-        ], dtype=int)
-        # print(CM)
-        coeff = env._env._game.emissions_KM
-        # CM = np.array([
-        #     env._env.distance_matrix*coeff[i]
-        #     for i in range(len(coeff))
-        # ]).copy()
-        a = multi_types(env._env.distance_matrix, rtes, coeff, excess)
-        # a = dests[i_id][np.where(a_GTS == 0)].astype(int)
-        env.reset()
-        _, r_opt, *_ = env.step(a)
-        # res = GameLearning(game, T=T, strategy=strategy, log = log)
-        res['time'] = time() - t0
-        res['sol'] = a
-        res['r'] = r_opt
-        q.put((id, res))
-        print(f'DP {id} done')
-        # res_dict = d
+#     def process_DP(env, id, q, excess):
+#         t0 = time()
+#         res = dict()
+#         rtes = np.array([
+#             [
+#                 env._env.initial_routes[m, i] 
+#                 for i in range(0, len(env._env.initial_routes[m]), 2)
+#             ]
+#             for m in range(len(env._env.initial_routes))
+#         ], dtype=int)
+#         # print(CM)
+#         coeff = env._env._game.emissions_KM
+#         # CM = np.array([
+#         #     env._env.distance_matrix*coeff[i]
+#         #     for i in range(len(coeff))
+#         # ]).copy()
+#         a = multi_types(env._env.distance_matrix, rtes, coeff, excess)
+#         # a = dests[i_id][np.where(a_GTS == 0)].astype(int)
+#         env.reset()
+#         _, r_opt, *_ = env.step(a)
+#         # res = GameLearning(game, T=T, strategy=strategy, log = log)
+#         res['time'] = time() - t0
+#         res['sol'] = a
+#         res['r'] = r_opt
+#         q.put((id, res))
+#         print(f'DP {id} done')
+#         # res_dict = d
         
-    def process_multiple_SA(env, id, q):
-        t0 = time()
-        res = dict()
-        action_SA, *_ = recuit(deepcopy(env._env), T_init, T_limit, lamb, H=T)
-        # res = recuit_multiple(game, T_init = T_init, T_limit = T_limit, lamb = lamb, log=log, H=T)
-        a = np.where(action_SA == 0)[0]
-        env.reset()
-        _, r_SA, *_ = env.step(a)
-        res['time'] = time() - t0
-        res['sol'] = a
-        res['r'] = r_SA
-        q.put((id, res))
-        print(f'SA {id} done')
+#     def process_multiple_SA(env, id, q):
+#         t0 = time()
+#         res = dict()
+#         action_SA, *_ = recuit(deepcopy(env._env), T_init, T_limit, lamb, H=T)
+#         # res = recuit_multiple(game, T_init = T_init, T_limit = T_limit, lamb = lamb, log=log, H=T)
+#         a = np.where(action_SA == 0)[0]
+#         env.reset()
+#         _, r_SA, *_ = env.step(a)
+#         res['time'] = time() - t0
+#         res['sol'] = a
+#         res['r'] = r_SA
+#         q.put((id, res))
+#         print(f'SA {id} done')
         
         
-    q_SA = mp.Manager().Queue()
-    q_DP = mp.Manager().Queue()
+#     q_SA = mp.Manager().Queue()
+#     q_DP = mp.Manager().Queue()
     
-    res_DP = dict()
-    res_SA = dict()
+#     res_DP = dict()
+#     res_SA = dict()
     
-    ps = []
+#     ps = []
     
-    with open(f'TransportersDilemma/RL/game_K{K}.pkl', 'rb') as f:
-        g = pickle.load(f)
-    routes = np.load(f'TransportersDilemma/RL/routes_K{K}.npy')
-    dests = np.load(f'TransportersDilemma/RL/destinations_K{K}.npy')
+#     with open(f'RL/game_K{K}.pkl', 'rb') as f:
+#         g = pickle.load(f)
+#     routes = np.load(f'RL/routes_K{K}.npy')
+#     dests = np.load(f'RL/destinations_K{K}.npy')
 
     
 
-    for i in range(n_simulation):
-        # game = AssignmentGame(Q=Q, K = K)
-        env = RemoveActionEnv(game = g, saved_routes = routes, saved_dests=dests, 
-                obs_mode='elimination_gain', 
-                action_mode = 'destinations',
-                  change_instance = False, rewards_mode='normalized_terminal', instance_id = i)
-        obs, info= env.reset()
-        # threads.append(Thread(target = process, args = (game, res[i])))
-        ps.append(mp.Process(target = process_DP, args = (deepcopy(env), i, q_DP, info['excess_emission'], )))
-        ps.append(mp.Process(target = process_multiple_SA, args = (deepcopy(env), i, q_SA,)))
-        # ps[i].start()
-        ps[2*i].start()
-        ps[2*i+1].start()
+#     for i in range(n_simulation):
+#         # game = AssignmentGame(Q=Q, K = K)
+#         env = RemoveActionEnv(game = g, saved_routes = routes, saved_dests=dests, 
+#                 obs_mode='elimination_gain', 
+#                 action_mode = 'destinations',
+#                   change_instance = False, rewards_mode='normalized_terminal', instance_id = i)
+#         obs, info= env.reset()
+#         # threads.append(Thread(target = process, args = (game, res[i])))
+#         ps.append(mp.Process(target = process_DP, args = (deepcopy(env), i, q_DP, info['excess_emission'], )))
+#         ps.append(mp.Process(target = process_multiple_SA, args = (deepcopy(env), i, q_SA,)))
+#         # ps[i].start()
+#         ps[2*i].start()
+#         ps[2*i+1].start()
         
-    for i in range(n_simulation):
-        # ps[i].join()
-        ps[2*i].join()
-        ps[2*i+1].join()
+#     for i in range(n_simulation):
+#         # ps[i].join()
+#         ps[2*i].join()
+#         ps[2*i+1].join()
         
-    print('all done !')
-    while not q_DP.empty():
-        i, d = q_DP.get()
-        res_DP[i] = d
+#     print('all done !')
+#     while not q_DP.empty():
+#         i, d = q_DP.get()
+#         res_DP[i] = d
         
-    while not q_SA.empty():
-        i, d = q_SA.get()
-        res_SA[i] = d
+#     while not q_SA.empty():
+#         i, d = q_SA.get()
+#         res_SA[i] = d
     
     
-    res = {
-        'res_DP' : res_DP,
-        'res_SA' : res_SA,
-    }
+#     res = {
+#         'res_DP' : res_DP,
+#         'res_SA' : res_SA,
+#     }
     
-    # with open(f"res_compare_baseline_greedy_SA_{strategy.__name__}_Q{Q}_K{K}_n{n_simulation}_T{T}.pkl","wb") as f:
-    # with open(f"res_compare_EG_A*_SA_K{K}_n{n_simulation}.pkl","wb") as f:
-    #     pickle.dump(res, f)
+#     # with open(f"res_compare_baseline_greedy_SA_{strategy.__name__}_Q{Q}_K{K}_n{n_simulation}_T{T}.pkl","wb") as f:
+#     # with open(f"res_compare_EG_A*_SA_K{K}_n{n_simulation}.pkl","wb") as f:
+#     #     pickle.dump(res, f)
     
-    r_DP = np.array([
-        res_DP[i]['r']
-        for i in res_DP.keys()
-    ])
+#     r_DP = np.array([
+#         res_DP[i]['r']
+#         for i in res_DP.keys()
+#     ])
     
-    r_SA = np.array([
-        res_SA[i]['r']
-        for i in res_SA.keys()
-    ])
-    # np.amin([[
-    #     res_SA[i][j]['list_best_costs']
-    #     for j in res_SA[i].keys() if j != 'time'
-    # ] for i in res_SA.keys()],
-    # axis=1)
+#     r_SA = np.array([
+#         res_SA[i]['r']
+#         for i in res_SA.keys()
+#     ])
+#     # np.amin([[
+#     #     res_SA[i][j]['list_best_costs']
+#     #     for j in res_SA[i].keys() if j != 'time'
+#     # ] for i in res_SA.keys()],
+#     # axis=1)
     
-    # print(costs_game.shape)
-    # print(costs_SA.shape)
+#     # print(costs_game.shape)
+#     # print(costs_SA.shape)
     
-    for i in range(len(r_SA)):
-        if r_SA[i]>r_DP[i]:
-            print(50*'-')
-            print(i)
-            print('SA :')
-            print(r_SA[i])
-            print(res_SA[i]['sol'])
-            print('DP :')
-            print(r_DP[i])
-            print(res_DP[i]['sol'])
+#     for i in range(len(r_SA)):
+#         if r_SA[i]>r_DP[i]:
+#             print(50*'-')
+#             print(i)
+#             print('SA :')
+#             print(r_SA[i])
+#             print(res_SA[i]['sol'])
+#             print('DP :')
+#             print(r_DP[i])
+#             print(res_DP[i]['sol'])
             
-            print(50*'-')
+#             print(50*'-')
             
             
 if __name__ == '__main__' :
