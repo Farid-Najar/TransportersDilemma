@@ -7,7 +7,7 @@ from SA_baseline import recuit
 
 def create_routes(env : AssignmentEnv, nb_routes = 5_000, retain_rate = 0., time_budget = 1, change_quantity = False, real_data = False):
     
-    nb_routes += 50
+    nb_routes += 20
     def process(env: AssignmentEnv, id, q, retained_dests):
         np.random.seed(id)
         
@@ -185,8 +185,9 @@ def create_x(K = 100):
     np.save(f'x_K{K}', x)
     
 
-def create_quantities(nb_routes = 5_000, time_budget = 1):
-    nb_routes += 50
+def create_quantities(g, nb_routes = 5_000, time_budget = 1, real_data = False):
+    nb_routes += 20
+    real = "real_" if real_data else ""
     def process(env: AssignmentEnv, id, q, dests):
         np.random.seed(id)
         
@@ -210,19 +211,9 @@ def create_quantities(nb_routes = 5_000, time_budget = 1):
         print(f'{id} done')
         q.put((id, res))
         return
-       
-    g = AssignmentGame(
-            grid_size=12,
-            max_capacity=25,
-            Q = 10,
-            K=20,
-            emissions_KM = [0., .1, .3, .3],
-            costs_KM = [1, 1, 1, 1],
-            seed=42
-        )
     
     comment = f'_retain{1.}'
-    with open(f'./game_K{g.num_packages}{comment}.pkl', 'wb') as f:
+    with open(f'./{real}game_K{g.num_packages}{comment}.pkl', 'wb') as f:
         pickle.dump(g, f, -1)
     
     q = mp.Manager().Queue()
@@ -235,15 +226,27 @@ def create_quantities(nb_routes = 5_000, time_budget = 1):
     destinations[0] = env.destinations
     routes[0] = env.initial_routes
     retained_dests = env.destinations
-    ps = []
     
-    for i in range(1, nb_routes):
+    for i in range(0, nb_routes, 5):
+        ps = []
         env = AssignmentEnv(deepcopy(g))
         ps.append(mp.Process(target = process, args = (deepcopy(env), i, q, retained_dests.copy(),)))
+        ps.append(mp.Process(target = process, args = (deepcopy(env), i+1, q, retained_dests.copy(),)))
+        ps.append(mp.Process(target = process, args = (deepcopy(env), i+2, q, retained_dests.copy(),)))
+        ps.append(mp.Process(target = process, args = (deepcopy(env), i+3, q, retained_dests.copy(),)))
+        ps.append(mp.Process(target = process, args = (deepcopy(env), i+4, q, retained_dests.copy(),)))
         ps[-1].start()
+        ps[-2].start()
+        ps[-3].start()
+        ps[-4].start()
+        ps[-5].start()
         
-    for p in ps:
-        p.join()
+        ps[-1].join()
+        ps[-2].join()
+        ps[-3].join()
+        ps[-4].join()
+        ps[-5].join()
+        
         
     print('all done !')
     while not q.empty():
@@ -264,9 +267,9 @@ def create_quantities(nb_routes = 5_000, time_budget = 1):
     routes = routes[:nb_routes-50]
     print('operation succeeded!')
     
-    np.save(f'routes_K{env._game.num_packages}{comment}', routes)
-    np.save(f'destinations_K{env._game.num_packages}{comment}', destinations)
-    np.save(f'quantities_K{env._game.num_packages}{comment}', quantities)
+    np.save(f'{real}routes_K{env._game.num_packages}{comment}', routes)
+    np.save(f'{real}destinations_K{env._game.num_packages}{comment}', destinations)
+    np.save(f'{real}quantities_K{env._game.num_packages}{comment}', quantities)
     
 
 def test():
@@ -308,10 +311,10 @@ def test():
     
 
 if __name__ == '__main__':
-    
+    REAL = True
     n = 200
     g = AssignmentGame(
-            real_data=True,
+            real_data=REAL,
             max_capacity=25,
             Q = 800,
             K=50,
@@ -320,10 +323,10 @@ if __name__ == '__main__':
             seed=42
         )
     env = AssignmentEnv(g)
-    create_routes(env, n, time_budget=60, retain_rate=.8)
+    create_routes(env, n, time_budget=60, retain_rate=.8, real_data=REAL)
     
     g = AssignmentGame(
-            real_data=True,
+            real_data=REAL,
             max_capacity=15,
             Q = 800,
             K=50,
@@ -332,10 +335,10 @@ if __name__ == '__main__':
             seed=42
         )
     env = AssignmentEnv(g)
-    create_routes(env, n, time_budget=60)
+    create_routes(env, n, time_budget=60, real_data=REAL)
     
     g = AssignmentGame(
-            real_data=True,
+            real_data=REAL,
             max_capacity=25,
             Q = 900,
             K=100,
@@ -344,10 +347,10 @@ if __name__ == '__main__':
             seed=42
         )
     env = AssignmentEnv(g)
-    create_routes(env, n, time_budget=60)
+    create_routes(env, n, time_budget=60, real_data=REAL)
     
     g = AssignmentGame(
-            real_data=True,
+            real_data=REAL,
             max_capacity=25,
             Q = 500,
             K=20,
@@ -355,12 +358,12 @@ if __name__ == '__main__':
             costs_KM = [1, 1, 1, 1],
             seed=42
         )
-    env = AssignmentEnv(g)
+    # env = AssignmentEnv(g)
     # create_routes(env, 1050, time_budget=60, retain_rate=1, change_quantity=True)
     # # create_labels()
     # # create_x()
     # # test()
-    create_quantities(n, time_budget=30)
+    create_quantities(g, n, time_budget=30, real_data=REAL)
     
     # g = AssignmentGame(
     #         grid_size=20,

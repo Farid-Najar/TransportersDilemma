@@ -4,4 +4,4 @@ __pycache__
 Maskable*
 ppo
 ppo_mask
-real_game*.pkl
+# real_game*.pkl

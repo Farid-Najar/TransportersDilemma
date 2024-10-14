@@ -30,8 +30,6 @@ import torch.nn as nn
 import torch as th
 from torch.nn import Linear
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv
-from torch_geometric.nn import global_mean_pool
 from gymnasium import spaces
 
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
@@ -263,7 +261,7 @@ def train_PPO_mask(
         #    vf=[2048, 2048, 1024, 256])#, 128])
     ),
     policy=MaskableActorCriticPolicy,
-    n_eval = 100,
+    n_eval = 50,
     budget = int(2e4),
     save = True,
     save_path = None,
@@ -420,33 +418,6 @@ class Multi(BaseFeaturesExtractor):
             cnn, observations["other"]
             ], dim=1
         ))
-
-    
-class GCN(th.nn.Module):
-    def __init__(self, observation_space: spaces, hidden_channels):
-        super(GCN, self).__init__()
-        th.manual_seed(12345)
-        self.conv1 = GCNConv(observation_space.num_features, hidden_channels)
-        self.conv2 = GCNConv(hidden_channels, hidden_channels)
-        self.conv3 = GCNConv(hidden_channels, hidden_channels)
-        self.lin = Linear(hidden_channels, 100)
-
-    def forward(self, x, edge_index, batch):
-        # 1. Obtain node embeddings 
-        x = self.conv1(x, edge_index)
-        x = x.relu()
-        x = self.conv2(x, edge_index)
-        x = x.relu()
-        x = self.conv3(x, edge_index)
-
-        # 2. Readout layer
-        x = global_mean_pool(x, batch)  # [batch_size, hidden_channels]
-
-        # 3. Apply a final classifier
-        x = F.dropout(x, p=0.5, training=self.training)
-        x = self.lin(x)
-        
-        return x
     
 if __name__ == '__main__':
     
@@ -585,7 +556,7 @@ if __name__ == '__main__':
             net_arch= [4096, 4096, 2048, 1024, 512] if (
                 args.K > 250#args.obs_mode == 'action' and args.action_mode == 'destinations'
                 ) else#or args.obs_mode == 'elimination_gain' else
-            [4096, 2048, 2048, 1024, 512]#, 128]#dict(
+            [4096, 2048, 1024, 1024]#, 128]#dict(
             # [2048, 2048, 1024, 256]#, 128]#dict(
             #    pi=[2048, 2048, 1024, 256],#, 128], 
             #    vf=[2048, 2048, 1024, 256])#, 128])
@@ -618,8 +589,8 @@ if __name__ == '__main__':
     #     budget=30_000, n_eval=25, save = True, save_path=save_dir
     # )
     
-    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 1000000  --obs_mode multi --K 50 --change_instance True
-    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 20000  --obs_mode multi --K 50
-    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 20000  --obs_mode multi --K 100
-    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 1000000 --K 50 --retain_rate 0.8 --change_instance True
-    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python /Users/faridounet/PhD/TransportersDilemma/RL/train_RL.py --verbose 1 --progress_bar True --steps 1000000 --K 20 --retain_rate 1. --change_instance True --obs_mode routes
+    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python RL/train_RL.py --verbose 1 --progress_bar True --steps 200000  --obs_mode multi --K 50
+    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python RL/train_RL.py --verbose 1 --progress_bar True --steps 200000  --obs_mode multi --K 100
+    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python RL/train_RL.py --verbose 1 --progress_bar True --steps 1000000  --obs_mode multi --K 50 --change_instance True
+    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python RL/train_RL.py --verbose 1 --progress_bar True --steps 1000000 --K 50 --retain_rate 0.8 --change_instance True
+    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python RL/train_RL.py --verbose 1 --progress_bar True --steps 1000000 --K 20 --retain_rate 1. --change_instance True

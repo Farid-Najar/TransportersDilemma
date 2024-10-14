@@ -585,7 +585,7 @@ class AssignmentEnv(gym.Env):
         self.K = self._game.num_packages
         self.omission_cost = self._game.omission_cost
         
-        d = len(self._game.distance_matrix)
+        d = self.K + 1#len(self._game.distance_matrix)
         if obs_mode == 'cost_matrix':
             self.obs_dim = (d, d)
             
@@ -595,8 +595,6 @@ class AssignmentEnv(gym.Env):
                 "other" : (self._game.max_capacity + 2)*self._game.num_vehicles + 1
             }
             
-        # elif obs_mode == 'state':
-        #     self.obs_dim = (self._game.max_capacity + 2)*self._game.num_vehicles + 1 + self.K *(self._game.max_capacity + 1)
             
         
         elif obs_mode == 'routes':
@@ -803,13 +801,15 @@ class AssignmentEnv(gym.Env):
             else:
                 self.observation = self.observation_space.sample()
                 self.observation["costs"] = M
+                # print(self.observation['other'])
                 self.observation['other'][:-1] = np.array([
                     self.initial_routes[m, j] 
                     for m in range(len(self.initial_routes))
                     for j in range(0, len(self.initial_routes[m]), 2)
                 ])
                 self.observation['other'][-1] = info['excess_emission']
-                self.observation['other'] /= np.max(self.observation['other'])
+                self.observation['other'] /= np.max(self.observation['other'])+1e-8
+                self.observation['other'] = np.clip(self.observation['other'], 0, 1)
                 
         if self.obs_mode == 'routes':#TODO finish the work
             self.observation = np.reshape(np.concatenate([
@@ -942,13 +942,18 @@ class AssignmentEnv(gym.Env):
             self.observation[-len(action)-1] = info['excess_emission']
             
         if self.obs_mode == 'multi':
+            
             self.observation['other'][:-1] = np.array([
                     routes[m, j] 
                     for m in range(len(routes))
                     for j in range(0, len(routes[m]), 2)
             ])
             self.observation['other'][-1] = info['excess_emission']
-            self.observation['other'] /= np.max(self.observation['other'])
+            try:
+                self.observation['other'] /= np.max(self.observation['other'])+1e-8
+            except :
+                print(self.observation['other'])
+            # self.observation['other'] /= np.max(self.observation['other'])
         
         if self.obs_mode != 'game':
             r = -(total_costs + max(0, total_emissions - self._game.Q)*self._game.CO2_penalty + omission_penalty)
@@ -1560,7 +1565,6 @@ class GameEnv(gym.Env):
         mesh.set_clim(np.min(weights),np.max(weights))
         # Visualizing colorbar part -start
         plt.colorbar(mesh,ax=ax)
-        # plt.colorbar()
         # plt.style.use("dark_background")
         # plt.legend()
         plt.show()

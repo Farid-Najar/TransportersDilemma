@@ -1,10 +1,7 @@
-import sys
-
 # direc = os.path.dirname(__file__)
 # pri&
 # caution: path[0] is reserved for script path (or '' in REPL)
 # print(str(path)+'/ppo')
-sys.path.insert(1, '/Users/faridounet/PhD/TransportersDilemma')
 
 from shortcut import multi_types
 from GameLearning import LRI, GameLearning, EXP3
