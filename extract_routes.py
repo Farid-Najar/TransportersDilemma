@@ -7,7 +7,8 @@ from SA_baseline import recuit
 
 def create_routes(env : AssignmentEnv, nb_routes = 5_000, retain_rate = 0., time_budget = 1, change_quantity = False, real_data = False):
     
-    nb_routes += 20
+    margin = 0
+    nb_routes += margin
     def process(env: AssignmentEnv, id, q, retained_dests):
         np.random.seed(id)
         
@@ -92,8 +93,8 @@ def create_routes(env : AssignmentEnv, nb_routes = 5_000, retain_rate = 0., time
     destinations = np.delete(destinations, delete, 0)
     routes = np.delete(routes, delete, 0)
 
-    destinations = destinations[:nb_routes-50]
-    routes = routes[:nb_routes-50]
+    destinations = destinations[:nb_routes-margin]
+    routes = routes[:nb_routes-margin]
     print('operation succeeded!')
     
     if real_data:
@@ -186,7 +187,9 @@ def create_x(K = 100):
     
 
 def create_quantities(g, nb_routes = 5_000, time_budget = 1, real_data = False):
-    nb_routes += 20
+    
+    margin = 0
+    nb_routes += margin
     real = "real_" if real_data else ""
     def process(env: AssignmentEnv, id, q, dests):
         np.random.seed(id)
@@ -263,8 +266,8 @@ def create_quantities(g, nb_routes = 5_000, time_budget = 1, real_data = False):
             routes = np.delete(routes, i, 0)
             quantities = np.delete(quantities, i, 0)
 
-    destinations = destinations[:nb_routes-50]
-    routes = routes[:nb_routes-50]
+    destinations = destinations[:nb_routes-margin]
+    routes = routes[:nb_routes-margin]
     print('operation succeeded!')
     
     np.save(f'{real}routes_K{env._game.num_packages}{comment}', routes)

@@ -1550,6 +1550,8 @@ class GameEnv(gym.Env):
                          node_shape='s',
                          arrows=True
         )
+        
+        plt.ylim(min(self.coordy[self.dests]) - 1, max(self.coordy[self.dests])+1)
 
         # handles, labels = ax.get_legend_handles_labels()
         # labels = list(range(len(colors)))
