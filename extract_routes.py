@@ -316,9 +316,10 @@ def test():
 if __name__ == '__main__':
     REAL = True
     n = 200
+    
     g = AssignmentGame(
             real_data=REAL,
-            max_capacity=25,
+            max_capacity=13,
             Q = 800,
             K=50,
             emissions_KM = [0., .1, .3, .3],
@@ -326,47 +327,49 @@ if __name__ == '__main__':
             seed=42
         )
     env = AssignmentEnv(g)
-    create_routes(env, n, time_budget=60, retain_rate=.8, real_data=REAL)
+    create_routes(env, n, time_budget=30, real_data=REAL)
     
-    g = AssignmentGame(
-            real_data=REAL,
-            max_capacity=15,
-            Q = 800,
-            K=50,
-            emissions_KM = [0., .1, .3, .3],
-            costs_KM = [1, 1, 1, 1],
-            seed=42
-        )
-    env = AssignmentEnv(g)
-    create_routes(env, n, time_budget=60, real_data=REAL)
-    
-    g = AssignmentGame(
-            real_data=REAL,
-            max_capacity=25,
-            Q = 900,
-            K=100,
-            emissions_KM = [0., .1, .3, .3],
-            costs_KM = [1, 1, 1, 1],
-            seed=42
-        )
-    env = AssignmentEnv(g)
-    create_routes(env, n, time_budget=60, real_data=REAL)
-    
-    g = AssignmentGame(
-            real_data=REAL,
-            max_capacity=25,
-            Q = 500,
-            K=20,
-            emissions_KM = [0., .1, .3, .3],
-            costs_KM = [1, 1, 1, 1],
-            seed=42
-        )
+    # g = AssignmentGame(
+    #         real_data=REAL,
+    #         max_capacity=13,
+    #         Q = 800,
+    #         K=50,
+    #         emissions_KM = [0., .1, .3, .3],
+    #         costs_KM = [1, 1, 1, 1],
+    #         seed=42
+    #     )
     # env = AssignmentEnv(g)
-    # create_routes(env, 1050, time_budget=60, retain_rate=1, change_quantity=True)
-    # # create_labels()
-    # # create_x()
-    # # test()
-    create_quantities(g, n, time_budget=30, real_data=REAL)
+    # create_routes(env, n, time_budget=30, retain_rate=.8, real_data=REAL)
+    
+    
+    
+    # g = AssignmentGame(
+    #         real_data=REAL,
+    #         max_capacity=25,
+    #         Q = 900,
+    #         K=100,
+    #         emissions_KM = [0., .1, .3, .3],
+    #         costs_KM = [1, 1, 1, 1],
+    #         seed=42
+    #     )
+    # env = AssignmentEnv(g)
+    # create_routes(env, n, time_budget=60, real_data=REAL)
+    
+    # g = AssignmentGame(
+    #         real_data=REAL,
+    #         max_capacity=25,
+    #         Q = 500,
+    #         K=20,
+    #         emissions_KM = [0., .1, .3, .3],
+    #         costs_KM = [1, 1, 1, 1],
+    #         seed=42
+    #     )
+    # # env = AssignmentEnv(g)
+    # # create_routes(env, 1050, time_budget=60, retain_rate=1, change_quantity=True)
+    # # # create_labels()
+    # # # create_x()
+    # # # test()
+    # create_quantities(g, n, time_budget=30, real_data=REAL)
     
     # g = AssignmentGame(
     #         grid_size=20,

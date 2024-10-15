@@ -22,6 +22,7 @@ class Table:
     values : np.ndarray
     sol : np.ndarray
     max_omitted : np.int64
+    
 @njit
 def compute_delta(cost_matrix, route, k):
     #compute the difference in cost when removing elements in the tour
@@ -236,9 +237,29 @@ if __name__ == '__main__':
     #         pickle.dump(g, f, -1)
             
     # print('The game is ready!')
-        
-    env = RemoveActionEnv(game = AssignmentGame(K = 100, Q = 30, max_capacity=50))
-    _, info = env.reset()
+    import pickle
+    real = "real_"
+    K = 50
+    retain = 0
+    retain_comment = f"_retain{retain}"if retain else ""
+
+    with open(f'{real}res_compare_EG_A*_SA_K50_n100.pkl', 'rb') as f:
+        data = pickle.load(f)
+
+    with open(f'RL/{real}game_K{K}{retain_comment}.pkl', 'rb') as f:
+        g = pickle.load(f)
+    routes = np.load(f'RL/{real}routes_K{K}{retain_comment}.npy')
+    dests = np.load(f'RL/{real}destinations_K{K}{retain_comment}.npy')
+
+    # env = RemoveActionEnv(game = AssignmentGame(
+        # K = 10, Q = 30, max_capacity=10, real_data=True, emissions_KM=[.3], costs_KM=[1]
+        # ),
+    # )
+    idx  = 12
+    env = RemoveActionEnv(game = g, saved_routes = routes, saved_dests=dests, 
+                      action_mode = 'destinations',
+                        change_instance = False, rewards_mode='normalized_terminal', instance_id = idx)
+    obs, info = env.reset()
     # print(env._env.distance_matrix*.3)
     
     # print(info['excess_emission'])
@@ -252,7 +273,7 @@ if __name__ == '__main__':
     print(routes)
     env_SA = deepcopy(env)
     print('gains : ', )
-    action_SA, *_ = recuit(deepcopy(env_SA._env), 5000, 1,0.9999, H=100_000)
+    action_SA, *_ = recuit(deepcopy(env_SA._env), 5000, 1, 0.9999, H=100_000)
     print('sa : ', len(action_SA) - np.sum(action_SA))
     print('sa : ', action_SA)
     print('excess : ', info['excess_emission'])
@@ -260,7 +281,9 @@ if __name__ == '__main__':
     info_SA = info
     a_SA = np.where(action_SA == 0)[0]
     for aa in a_SA:
-        _, r_SA, *_, info_SA = env_SA.step(aa)
+        print(f'obs : {obs[:-100].astype(int)}')
+        print(100*'-')
+        obs, r_SA, *_, info_SA = env_SA.step(aa)
         print('removed ', aa+1, ', gained : ', ee - info_SA['excess_emission'])
         ee = info_SA['excess_emission']
         
@@ -291,7 +314,7 @@ if __name__ == '__main__':
     # assert (CM[1] == env._env.distance_matrix*.3).all()
     
     rtes = routes.copy()
-    # print(CM)
+    print(env._env.distance_matrix.shape)
     a = multi_types(env._env.distance_matrix, routes, coeff, info['excess_emission'])
     print(a)
     ee = info['excess_emission']

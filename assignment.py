@@ -1119,10 +1119,10 @@ class RemoveActionEnv(gym.Env):
             self.action_mask[a] = False
             a = (self.destinations[:, None] == a).argmax(axis=0)
         
-        if self.action_mode == 'all_nodes':
-            obs = self.action_mask.astype(int)
-        else:
-            obs = self.obs
+        # if self.action_mode == 'all_nodes':
+        #     obs = self.action_mask.astype(int)
+        # else:
+        #     obs = self.obs
             
         done = d or bool(self.t > (self.H-1))
         
