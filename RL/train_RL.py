@@ -592,5 +592,5 @@ if __name__ == '__main__':
     # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python RL/train_RL.py --verbose 1 --progress_bar True --steps 200000  --obs_mode multi --K 50
     # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python RL/train_RL.py --verbose 1 --progress_bar True --steps 200000  --obs_mode multi --K 100
     # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python RL/train_RL.py --verbose 1 --progress_bar True --steps 1000000  --obs_mode multi --K 50 --change_instance True
-    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python RL/train_RL.py --verbose 1 --progress_bar True --steps 1000000 --K 50 --retain_rate 0.8 --change_instance True
+    # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python RL/train_RL.py --verbose 1 --progress_bar True --steps 1000001 --K 50 --retain_rate 0.8 --change_instance True
     # /Users/faridounet/Research/PhD/.venv_DQVRP/bin/python RL/train_RL.py --verbose 1 --progress_bar True --steps 1000000 --K 20 --retain_rate 1. --change_instance True
