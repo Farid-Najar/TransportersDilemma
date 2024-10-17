@@ -49,8 +49,10 @@ def compute_delta(cost_matrix, route, k):
 
 
 @njit
-def compute_smallest_cost(cost_matrix, route, excess): 
-    K = len(route) - 1
+def compute_smallest_cost(cost_matrix, route, excess, q): 
+    K = q.sum()#len(route) - 1 # TODO
+    cum_q = np.cumsum(q)
+    
     delta = compute_delta(cost_matrix, route, K+1)
     #print("route",route)
     #print("cost_mat",cost_matrix)
@@ -65,18 +67,22 @@ def compute_smallest_cost(cost_matrix, route, excess):
             break
         # while the pollution constraint is violated, try to remove one additional package
         max_omitted = k
-        for i in range(k+1, len(route)):
+        debut = np.argmin(cum_q < k)
+        for i in range(debut, len(route)):
             #we may begin from k+1, because we need to remove k elements before it and vertex 0 cannot be removed
             # loop to determine the optimal number of elements to remove before i
-            for j in range(k+1):
+            for j in range(i):
                 #break when an element cannot be removed
                 if delta[i][j] == -1:
                     break
-                
-                val = delta[i, j] + values[k-j, i-j-1]
-                if(val > values[k, i]):
-                    values[k, i] = val
-                    sol[k, i] = j
+                oq = q[i-j-1: i].sum() # Omitted quatities q.shape = (capacité du vehicule, )
+                if k>=oq:
+                    val = delta[i, j] + values[k-oq, i-j-1]
+                    if(val > values[k, i]):
+                        values[k, i] = val
+                        sol[k, i] = j
+                else:
+                    break
         
     # // //print for debugging
     # // for(int i = 0; i <= tab.max_omitted; i++){
@@ -155,12 +161,13 @@ def get_solution_multiple_types(sol, max_sol, routes, types):
     return solution
     
 @njit
-def multi_types(cost_matrix, rtes, coef, excess):
+def multi_types(cost_matrix, rtes, coef, excess, quants):
     
     selection = np.where(coef > 0)[0]
     
     routes = rtes[selection]
     coeff  = coef[selection]
+    q  = quants[selection]
     
     types = len(routes)
     K = len(routes[0])-2
@@ -178,7 +185,7 @@ def multi_types(cost_matrix, rtes, coef, excess):
     # print('excess/coeff : ', excess/coeff)
     
     for i in range(types):
-        sol[i], values[i], max_omitted[i] = compute_smallest_cost(cost_matrix, routes[i], excess/coeff[i])
+        sol[i], values[i], max_omitted[i] = compute_smallest_cost(cost_matrix, routes[i], excess/coeff[i], q[i])
         #extract the best combination of omission between the different types
         value_tables.append(values[i, :max_omitted[i]+1, -1])
 
@@ -239,8 +246,8 @@ if __name__ == '__main__':
     # print('The game is ready!')
     import pickle
     real = "real_"
-    K = 50
-    retain = 0
+    K = 20
+    retain = 1.0
     retain_comment = f"_retain{retain}"if retain else ""
 
     with open(f'{real}res_compare_EG_A*_SA_K50_n100.pkl', 'rb') as f:
@@ -250,6 +257,8 @@ if __name__ == '__main__':
         g = pickle.load(f)
     routes = np.load(f'RL/{real}routes_K{K}{retain_comment}.npy')
     dests = np.load(f'RL/{real}destinations_K{K}{retain_comment}.npy')
+    if K == 20:
+        qs = np.load(f'RL/{real}quantities_K{K}{retain_comment}.npy')
 
     # env = RemoveActionEnv(game = AssignmentGame(
         # K = 10, Q = 30, max_capacity=10, real_data=True, emissions_KM=[.3], costs_KM=[1]
@@ -257,7 +266,7 @@ if __name__ == '__main__':
     # )
     idx  = 12
     env = RemoveActionEnv(game = g, saved_routes = routes, saved_dests=dests, 
-                      action_mode = 'destinations',
+                      action_mode = 'destinations', saved_q = qs if K == 20 else None, 
                         change_instance = False, rewards_mode='normalized_terminal', instance_id = idx)
     obs, info = env.reset()
     # print(env._env.distance_matrix*.3)
@@ -269,6 +278,14 @@ if __name__ == '__main__':
             for i in range(0, len(env._env.initial_routes[m]), 2)
         ]
         for m in range(len(env._env.initial_routes))
+    ], dtype=np.int64)
+    
+    q = np.array([
+        [
+            env._env.quantities[i-1] if i else 0
+            for i in routes[m]
+        ]
+        for m in range(len(routes))
     ], dtype=np.int64)
     print(routes)
     env_SA = deepcopy(env)
@@ -315,7 +332,7 @@ if __name__ == '__main__':
     
     rtes = routes.copy()
     print(env._env.distance_matrix.shape)
-    a = multi_types(env._env.distance_matrix, routes, coeff, info['excess_emission'])
+    a = multi_types(env._env.distance_matrix, routes, coeff, info['excess_emission'], q)
     print(a)
     ee = info['excess_emission']
     print('tot emission : ', ee)
