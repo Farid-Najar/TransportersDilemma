@@ -11,13 +11,13 @@ from GameLearning import make_different_sims, EXP3, LRI
 
 if __name__ == '__main__' :
     
-    # compare(n_simulation=100, K=20, retain=1., real_data=True)#TODO
+    compare(n_simulation=100, K=20, retain=1., real_data=True)
     
     # compare(n_simulation=100, K=50, real_data=True)
-    compare(n_simulation=100, K=50, retain=.8, real_data=True)
-    compare(n_simulation=100, K=100, real_data=True)
+    # compare(n_simulation=100, K=50, retain=.8, real_data=True)
+    # compare(n_simulation=100, K=100, real_data=True)
     
-    run_SA_TSP(n_simulation=100, K=20, retain=1., real_data=True)
+    # run_SA_TSP(n_simulation=100, K=20, retain=1., real_data=True)
     # run_SA_TSP(n_simulation=100, K=50, real_data=True)
     # run_SA_TSP(n_simulation=100, K=100, real_data=True)
     
@@ -25,13 +25,13 @@ if __name__ == '__main__' :
     # make_different_sims(K = K, strategy = LRI, n_simulation=100, T=10_000, log=False, tsp=True, comment = '_tsp', real_data = True)
     # make_different_sims(K = K, strategy = EXP3, n_simulation=100, T=10_000, log=False, tsp=True, comment = '_tsp', real_data = True)
     
-    K = 100
-    make_different_sims(K = K, strategy = LRI, n_simulation=100, T=15_000, log=False, tsp=True, comment = '_tsp', real_data = True)
-    make_different_sims(K = K, strategy = EXP3, n_simulation=100, T=15_000, log=False, tsp=True, comment = '_tsp', real_data = True)
+    # K = 100
+    # make_different_sims(K = K, strategy = LRI, n_simulation=100, T=15_000, log=False, tsp=True, comment = '_tsp', real_data = True)
+    # make_different_sims(K = K, strategy = EXP3, n_simulation=100, T=15_000, log=False, tsp=True, comment = '_tsp', real_data = True)
     
-    K = 20
-    make_different_sims(K = K, strategy = LRI, n_simulation=100, T=10_000, log=False, tsp=True, comment = '_tsp', real_data = True)
-    make_different_sims(K = K, strategy = EXP3, n_simulation=100, T=10_000, log=False, tsp=True, comment = '_tsp', real_data = True)
+    # K = 20
+    # make_different_sims(K = K, strategy = LRI, n_simulation=100, T=10_000, log=False, tsp=True, comment = '_tsp', real_data = True)
+    # make_different_sims(K = K, strategy = EXP3, n_simulation=100, T=10_000, log=False, tsp=True, comment = '_tsp', real_data = True)
     
     # import os
     # To run RL experiments

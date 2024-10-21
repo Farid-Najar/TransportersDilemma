@@ -95,7 +95,15 @@ def compare(
         #     env._env.distance_matrix*coeff[i]
         #     for i in range(len(coeff))
         # ]).copy()
-        a = multi_types(env._env.distance_matrix, rtes, coeff, excess)
+        quants = np.array([
+            [
+                env._env.quantities[i-1] if i else 0
+                for i in rtes[m]
+            ]
+            for m in range(len(rtes))
+            ], dtype=np.int64
+        )
+        a = multi_types(env._env.distance_matrix, rtes, coeff, excess, quants)
         # a = dests[i_id][np.where(a_GTS == 0)].astype(int)
 
         env.reset()

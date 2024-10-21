@@ -8,7 +8,7 @@ from SA_baseline import recuit
 # caution: path[0] is reserved for script path (or '' in REPL)
 # print(str(path)+'/ppo')
 sys.path.insert(1, '/Users/faridounet/PhD/TransportersDilemma')
-JIT = True
+JIT = False
 import numpy as np
 if JIT:
     from numba import njit
@@ -50,33 +50,35 @@ def compute_delta(cost_matrix, route, k):
 
 @njit
 def compute_smallest_cost(cost_matrix, route, excess, q): 
-    K = q.sum()#len(route) - 1 # TODO
+    K = len(route) - 1
     cum_q = np.cumsum(q)
     
     delta = compute_delta(cost_matrix, route, K+1)
     #print("route",route)
     #print("cost_mat",cost_matrix)
-    #print("delta",delta)
+    # print("delta",delta)
     # values, sol = init_table(len(route),K+1)
     sol = np.zeros((K, len(route)), dtype=np.int64)
     values = np.zeros((K, len(route)))
-    max_omitted = 0
+    # max_omitted = K #quantity max that need to be ommited to satisfy the constraint
     for k in range(1, K):
-        if values[k-1, len(route)-1] >= excess:
-            # print("trouve assez de packets avec le camion :",k-1,values[k-1, len(route)-1])
-            break
-        # while the pollution constraint is violated, try to remove one additional package
-        max_omitted = k
-        debut = np.argmin(cum_q < k)
+        # if values[k-1, len(route)-1] >= excess:
+        #     # while the pollution constraint is violated, try to remove one more in quantity
+        #     # max_omitted = k
+        #     break
+        
+        debut = np.argmin(cum_q < k)# +1
         for i in range(debut, len(route)):
-            #we may begin from k+1, because we need to remove k elements before it and vertex 0 cannot be removed
-            # loop to determine the optimal number of elements to remove before i
-            for j in range(i):
+            # we begin from debut, the first index from which we 
+            # are able to remove quantity k before it
+            # 
+            # j is the number of consecutive elements we remove before i
+            for j in range(i): 
                 #break when an element cannot be removed
                 if delta[i][j] == -1:
                     break
-                oq = q[i-j-1: i].sum() # Omitted quatities q.shape = (capacité du vehicule, )
-                if k>=oq:
+                oq = q[i-j: i].sum() # when it sums the empty slice, it is zero
+                if k>=oq: #it is possible to omit thiq quantity without removing more than k
                     val = delta[i, j] + values[k-oq, i-j-1]
                     if(val > values[k, i]):
                         values[k, i] = val
@@ -93,7 +95,7 @@ def compute_smallest_cost(cost_matrix, route, excess, q):
     # // for(int i = 0; i < tab.max_omitted; i++){
     # //     printf("%d ",s[i]);
     # // }
-    return sol, values, max_omitted
+    return sol, values#, max_omitted
 
 @njit
 def value(value_tables, coeff, types, sol, excess):
@@ -108,17 +110,23 @@ def value(value_tables, coeff, types, sol, excess):
     return gain if pol - excess >= -1e-5 else 0.
 
 @njit
-def best_combination(k, types, current_type, value_tables, max_omitted,coeff, excess, sol, max_val, max_sol):
+def best_combination(k, types, current_type, value_tables, #max_omitted
+                     coeff, excess, sol, max_val, max_sol):
     #extremly simplistic enumeration of the way to generate k
     #we could also determine by dynamic programming all value of k rather than testing every possible value
     total = sol[:current_type].sum()
+    # print('best', total)
+    # print('current type', current_type)
+    # print('current type', types)
     #printf("Total %d current type %d\n",total,current_type);
     if(current_type == types -1):   
-        if k - total > max_omitted[current_type]:
+        if k - total > len(value_tables[0])-1:#max_omitted[current_type]:
+            # print(k, total, len(sol))
+            # print(len(value_tables[0]))
             return #not a possible solution
         sol[current_type] = k - total
+        # print('sol : ', sol)
         val = value(value_tables,coeff,types,sol,excess)
-        # print(sol, val)
         # print("value : %f \n",val)
         if (val > max_val[0]):
             max_val[0] = val
@@ -129,35 +137,40 @@ def best_combination(k, types, current_type, value_tables, max_omitted,coeff, ex
             #max_sol =  sol
             #print("solution trouvée : ",max_sol,"k : ",k,"index actif",current_type)    
     else:    
-        for i in range(min(k - total + 1,max_omitted[current_type] + 1)):
+        for i in range(min(k - total + 1,len(value_tables[0]))):
             sol[current_type] = i
-            best_combination(k, types, current_type + 1, value_tables, max_omitted,coeff, excess, sol, max_val, max_sol)
+            best_combination(k, types, current_type + 1, value_tables,coeff, excess, sol, max_val, max_sol)
 
 @njit
-def get_solution_single_type(sol, k, tour_length):
+def get_solution_single_type(sol, k, tour_length, q):
     #get an optimal solution with k omitted packages from a full dynamic table
-    solution = np.zeros(k, dtype=np.int64)
+    # solution = np.zeros(k, dtype=np.int64)
+    l = List()
     position = tour_length-1
     #printf("\n K max considéré: %d Position max : %d\n",k,position);
     while(k):
         #continue until it has found all packets to remove
         to_remove = sol[k][position]
         #printf("%d %d %d\n",position,k,to_remove);
-        for i in range(1, to_remove+1):
-            k -= 1
-            solution[k] = position -i
+        k -= q[position-to_remove: position].sum() 
+        l += List(range(position-1, position-to_remove-1, -1))
+        # print(to_remove)
+        # print(position-1, position-to_remove+1)
+        # for i in range(1, to_remove+1):
+            # k -= 1
+            # solution[k] = position -i
         
         position -= to_remove+1
-
-    return solution
+    solution = np.array(l)
+    return np.flip(solution)
 
 
 @njit
-def get_solution_multiple_types(sol, max_sol, routes, types):
+def get_solution_multiple_types(sol, max_sol, routes, types, q):
     #get a solution from a full dynamic table
     solution = []#np.zeros((types, len(routes[0])), dtype=np.int64)
     for i in range(types):
-        solution.append(get_solution_single_type(sol[i],max_sol[i],len(routes[i])))
+        solution.append(get_solution_single_type(sol[i],max_sol[i],len(routes[i]), q[i]))
     return solution
     
 @njit
@@ -168,16 +181,17 @@ def multi_types(cost_matrix, rtes, coef, excess, quants):
     routes = rtes[selection]
     coeff  = coef[selection]
     q  = quants[selection]
+    # print('qs : ', q)
     
     types = len(routes)
-    K = len(routes[0])-2
+    K = len(routes[0])-2 # np.amax(np.sum(q, 1))
     
     #types is the number of types (and thus of tour and coeff)
 
      #problem here plutot une liste de tableau qui peuvent avoir des tailles différentes
     sol = np.zeros((types, K+1, len(routes[0])), dtype=np.int64)
     values = np.zeros((types, K+1, len(routes[0])), dtype=float)
-    max_omitted = np.zeros(types, dtype=np.int64)
+    # max_omitted = np.zeros(types, dtype=np.int64)
     
     #weight = coeff/np.sum(coeff)
     
@@ -185,13 +199,17 @@ def multi_types(cost_matrix, rtes, coef, excess, quants):
     # print('excess/coeff : ', excess/coeff)
     
     for i in range(types):
-        sol[i], values[i], max_omitted[i] = compute_smallest_cost(cost_matrix, routes[i], excess/coeff[i], q[i])
+        sol[i], values[i] = compute_smallest_cost(cost_matrix, routes[i], excess/coeff[i], q[i])
         #extract the best combination of omission between the different types
-        value_tables.append(values[i, :max_omitted[i]+1, -1])
-
+        value_tables.append(values[i, :, -1])
+        
     # print('value tables : ', value_tables)
-        # print(values[i, 1])
-        # print(values[i, 1, -1])
+    # # print('max omitted tables : ', max_omitted)
+    # print('sol tables : ', sol)
+    # print(100*'-')
+    
+    # print(values[i, 1])
+    # print(values[i, 1, -1])
     # print("taille des routes")
     # for i in range(types):
     #     print(i," : ", len(routes[i]),"\n")
@@ -201,15 +219,20 @@ def multi_types(cost_matrix, rtes, coef, excess, quants):
     max_sol = np.zeros(types, dtype=np.int64)
     max_val = np.zeros(1)
     # print("max ommited:",max_omitted)
-    for k in range(1, max_omitted.sum() +1):
+    for k in range(1, types*(K+1)):#max_omitted.sum() +1):
         #we could begin with a larger k, compute by how much
         #printf("k: %d \n",k);
-        best_combination(k, types, 0, value_tables,max_omitted, coeff, excess, solution, max_val, max_sol)
+        best_combination(k, types, 0, value_tables, coeff, excess, solution, max_val, max_sol)
         if(max_val[0] != 0):
             # print("solution de taille",k,max_sol,"valeur",max_val[0])
             break
         
-    final_sol = get_solution_multiple_types(sol, max_sol, routes, types)
+    # print('value tables : ', value_tables)
+    # # print('max omitted tables : ', max_omitted)
+    # print('sol tables : ', sol)
+    # print('max sol tables : ', max_sol)
+    
+    final_sol = get_solution_multiple_types(sol, max_sol, routes, types, q)
     # printf("best solution of value: %f\n",*max_val);
     # for i in range(types):
     #     print(max_sol[i], "packages omitted in tour ", i, " : ", end='')
@@ -260,14 +283,28 @@ if __name__ == '__main__':
     if K == 20:
         qs = np.load(f'RL/{real}quantities_K{K}{retain_comment}.npy')
 
-    # env = RemoveActionEnv(game = AssignmentGame(
-        # K = 10, Q = 30, max_capacity=10, real_data=True, emissions_KM=[.3], costs_KM=[1]
-        # ),
-    # )
-    idx  = 12
+    env = RemoveActionEnv(game = AssignmentGame(
+        K = 5, Q = 30, max_capacity=10, real_data=True, emissions_KM=[.3], costs_KM=[1]
+        ),
+    )
+    idx  = 11
     env = RemoveActionEnv(game = g, saved_routes = routes, saved_dests=dests, 
                       action_mode = 'destinations', saved_q = qs if K == 20 else None, 
                         change_instance = False, rewards_mode='normalized_terminal', instance_id = idx)
+    
+    # quantities = np.ones(5, dtype=int)
+    # C = env._env._game.max_capacity * env._env._game.num_vehicles - env._env._game.num_packages
+    # c = (C*np.random.dirichlet(np.ones(5))).astype(int)
+    # quantities += c
+    # from assignment import Package
+    # packages = [
+    #         Package(
+    #             destination=k+1,
+    #             quantity=quantities[k],
+    #         )
+    #         for k in range(5)
+    #     ]
+    # obs, info = env.reset(packages = packages, time_budget = 1)
     obs, info = env.reset()
     # print(env._env.distance_matrix*.3)
     
@@ -298,7 +335,7 @@ if __name__ == '__main__':
     info_SA = info
     a_SA = np.where(action_SA == 0)[0]
     for aa in a_SA:
-        print(f'obs : {obs[:-100].astype(int)}')
+        # print(f'obs : {obs[:-100].astype(int)}')
         print(100*'-')
         obs, r_SA, *_, info_SA = env_SA.step(aa)
         print('removed ', aa+1, ', gained : ', ee - info_SA['excess_emission'])
@@ -315,7 +352,7 @@ if __name__ == '__main__':
     print('excess : ', info_SA['excess_emission'])
     print('r_SA : ', r_SA)
     
-    print(np.where(action_SA == 0))
+    print(a_SA + 1)
     print()
     print(50*'-')
     print('SHORTCUT')
@@ -333,7 +370,8 @@ if __name__ == '__main__':
     rtes = routes.copy()
     print(env._env.distance_matrix.shape)
     a = multi_types(env._env.distance_matrix, routes, coeff, info['excess_emission'], q)
-    print(a)
+    print(a+1)
+    print(np.where(action_SA == 0)[0]+1)
     ee = info['excess_emission']
     print('tot emission : ', ee)
     cum_ee = 0.
