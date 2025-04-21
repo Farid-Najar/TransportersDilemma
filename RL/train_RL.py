@@ -121,7 +121,7 @@ def train_RL(
             batch_size=n_steps*os.cpu_count(),
             # n_epochs=50,
             # learning_rate=5e-5,
-            verbose=1,
+            verbose=0,
             tensorboard_log=algo_dir+"/"
         )
     logging.info(f"the model parameters :\n {model.__dict__}")
@@ -143,7 +143,7 @@ def train_RL(
     
     eval_callback = callbackClass(vec_env, best_model_save_path=algo_dir,
                              log_path=algo_dir, eval_freq=eval_freq,
-                             deterministic=True)
+                             deterministic=True, verbose=0)
     
     model.learn(
         total_timesteps=budget,
@@ -256,7 +256,7 @@ def train_PPO_mask(
     policy_kwargs = dict(
         activation_fn=nn.ReLU,
         share_features_extractor=True,
-        net_arch=[2048, 2048, 1024, 128]#dict(
+        net_arch=[1024, 1024, 1024, 256]#dict(
         #    pi=[2048, 2048, 1024, 256],#, 128], 
         #    vf=[2048, 2048, 1024, 256])#, 128])
     ),
@@ -372,7 +372,7 @@ class Multi(BaseFeaturesExtractor):
 
     def __init__(self, 
                  observation_space: spaces.Box, 
-                 hidden_layers : list = [2048, 2048, 1024, 512],
+                 hidden_layers : list = [1024, 1024, 1024, 256],
                 #  features_dim: int = 256
                  ):
         super().__init__(observation_space, hidden_layers[-1])
@@ -419,166 +419,229 @@ class Multi(BaseFeaturesExtractor):
             ], dim=1
         ))
     
-if __name__ == '__main__':
-    
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--algo', default="ppo_mask", choices=['ppo', 'ppo_mask'],
-                        help='Selects the RL algorithm')
-    parser.add_argument('--r_mode', default="normalized_terminal", choices=['heuristic', 'terminal', 'normalized_terminal', 'penalize_length'],
-                        help='Selects the reward function')
-    parser.add_argument('--obs_mode', default="multi", choices=['cost_matrix','routes', 'action', 'elimination_gain', 'assignment', 'multi'],
-                        help='Selects the observation of the agent.')
-    parser.add_argument('--action_mode', default="destinations", choices=['destinations', 'all_nodes'],
-                        help='Selects the actions of the agent.')
-    
-    parser.add_argument('--n_steps', type=int, default=256,
-                       help='the number of steps done on an environment before updating the model')
-    
-    # parser.add_argument('--batch_size', type=int, default=2048,
-    #                    help='the batch size of ppo')
-    # parser.add_argument('--minibatch_size', type=int, default=256,
-    #                    help='the mini batch size of ppo')
-    parser.add_argument('--n_eval', type=int, default=25,
-                       help='the sample size for the policy evaluation')
-    parser.add_argument('--steps', type=int, default=50_000,
-                       help='the maximum steps done by the algorithm')
-    parser.add_argument('--verbose', type=int, default=0,
-                       help='the verbosity')
-    parser.add_argument('--save', type=bool, default=True,
-                       help='save the model')
-    parser.add_argument('--load', type=bool, default=False,
-                       help='load the model')
-    parser.add_argument('--eval_freq', type=int, default=500,
-                       help='the number of steps before an evaluation')
-    parser.add_argument('--progress_bar', type=bool, default=False,
-                       help='the progress bar appearance')
-    
-    parser.add_argument('--real_data', type=bool, default=True,
-                       help='the use of real data if True, synthetic data otherwise')
-    
-    parser.add_argument('--gamma', type=float, default=0.99,
-                       help='the discount factor gamma')
-    
-    parser.add_argument('--retain_rate', type=float, default=None,
-                       help='the discount factor gamma')
-    
-    parser.add_argument('--Q', type=float, default=30,
-                       help='the emission quota')
-    parser.add_argument('--K', type=int, default=50,
-                       help='the number of deliveries')
-    parser.add_argument('--C', type=int, default=15,
-                       help='the capacity of each vehicle')
-    parser.add_argument('--load_game', type=bool, default=True,
-                       help='if the game is saved already')
-    parser.add_argument('--instance_id', type=int, default=0,
-                       help='The id of the saved instance')
-    parser.add_argument('--change_instance', type=bool, default=False,
-                       help='if the model should try to solve other instances')
+def run(i, steps = 150000, K = 50, retain_rate = None):
     
     
-    args = parser.parse_args()
-
-    # train_PPO(budget=15000, n_eval=1, save = False)
-    # r_mode = 'penalize_length'
-    # save_dir = str(path)+f'/ppo_mask/rewardMode({r_mode})_steps({budget})'
-    # os.mkdir(save_dir)
-    # train_PPO_mask(env_kwargs = dict(
-    #     rewards_mode = r_mode, # possible values ['heuristic', 'terminal', 'penalize_length']
-    # ),
-    # budget=budget, n_eval=25, save = True, save_path=save_dir
-    # )
-    comment = ''
-    real = "real_" if args.real_data else ""
+    real = "real_"# if args.real_data else ""
     # if args.change_instance: assert False
-    if not args.change_instance:
-        comment += f'_instanceID{str(args.instance_id)}'
-    if args.algo == 'ppo':
-        train_algo = train_PPO
-        save_dir = str(path)+f'/ppo/{real}K{args.K}_rewardMode({args.r_mode})_steps({args.steps})'+comment
+    if retain_rate is None:
+        with open(f'RL/{real}game_K{K}.pkl', 'rb') as f:
+            g = pickle.load(f)
+        routes = np.load(f'RL/{real}routes_K{K}.npy')
+        dests = np.load(f'RL/{real}destinations_K{K}.npy')
     else:
-        train_algo = train_PPO_mask
-        save_dir = str(path)+f'/ppo_mask/{real}K{args.K}_rewardMode({args.r_mode})_obsMode({args.obs_mode})_steps({args.steps})'+comment
+        with open(f'RL/{real}game_K{K}_retain{retain_rate}.pkl', 'rb') as f:
+            g = pickle.load(f)
+        routes = np.load(f'RL/{real}routes_K{K}_retain{retain_rate}.npy')
+        dests = np.load(f'RL/{real}destinations_K{K}_retain{retain_rate}.npy')
+                
+    policy = 'MultiInputPolicy'
+    p_kwargs = dict(
+        # normalize
+        features_extractor_class=Multi,
+        # features_extractor_kwargs=dict(features_dim=128),
+    )
+    comment = ''
+    comment += f'_instanceID{str(i)}'
+    train_algo = train_PPO_mask
+    save_dir = str(path)+f'/ppo_mask/{real}K{K}_rewardMode(normalized_terminal)_obsMode(multi)_steps({steps})'+comment
     os.makedirs(save_dir, exist_ok=True)
     
-
-    try:
-        if args.load_game:
-            if args.retain_rate is None:
-                with open(f'RL/{real}game_K{args.K}.pkl', 'rb') as f:
-                    g = pickle.load(f)
-                routes = np.load(f'RL/{real}routes_K{args.K}.npy')
-                dests = np.load(f'RL/{real}destinations_K{args.K}.npy')
-            else:
-                with open(f'RL/{real}game_K{args.K}_retain{args.retain_rate}.pkl', 'rb') as f:
-                    g = pickle.load(f)
-                routes = np.load(f'RL/{real}routes_K{args.K}_retain{args.retain_rate}.npy')
-                dests = np.load(f'RL/{real}destinations_K{args.K}_retain{args.retain_rate}.npy')
-        else:
-            assert False
-    except Exception as e:
-        print(e)
-        raise('couldnt load')
-        g = AssignmentGame(
-            grid_size=15,
-            max_capacity=args.C,
-            Q = args.Q,
-            K=args.K
-        )
-        with open(save_dir+'/game.pkl', 'wb') as f:
-                pickle.dump(g, f, -1)
-        routes = None,
-        dests = None,
-        
-    if args.load:
-        algo_file = str(path)
-    else:
-        algo_file = None
-        
-    if args.obs_mode == 'cost_matrix':
-        policy = 'CnnPolicy'
-        p_kwargs = dict(
-            # normalize
-            features_extractor_class=CustomCNN,
-            features_extractor_kwargs=dict(features_dim=128),
-        )
-    elif args.obs_mode == 'multi':
-        policy = 'MultiInputPolicy'
-        p_kwargs = dict(
-            # normalize
-            features_extractor_class=Multi,
-            # features_extractor_kwargs=dict(features_dim=128),
-        )
-    else:
-        policy = MaskableActorCriticPolicy
-        p_kwargs = dict(
-            activation_fn=nn.ReLU,#LeakyReLU,
-            share_features_extractor=True,
-            net_arch= [4096, 4096, 2048, 1024, 512] if (
-                args.K > 250#args.obs_mode == 'action' and args.action_mode == 'destinations'
-                ) else#or args.obs_mode == 'elimination_gain' else
-            [4096, 2048, 1024, 1024]#, 128]#dict(
-            # [2048, 2048, 1024, 256]#, 128]#dict(
-            #    pi=[2048, 2048, 1024, 256],#, 128], 
-            #    vf=[2048, 2048, 1024, 256])#, 128])
-        )
+    
+    
+    
+    
     train_algo(
         env_kwargs = dict(
             game = g,
-            rewards_mode = args.r_mode, # possible values ['heuristic', 'terminal', 'normalized_terminal', 'penalize_length']
-            action_mode = args.action_mode,
+            rewards_mode = 'normalized_terminal', # possible values ['heuristic', 'terminal', 'normalized_terminal', 'penalize_length']
+            action_mode = "destinations",
             saved_routes = routes,
             saved_dests = dests,
-            obs_mode = args.obs_mode,
-            change_instance = args.change_instance,
-            instance_id = args.instance_id,
+            obs_mode = "multi",
+            change_instance = False,
+            instance_id = i,
         ),
         policy_kwargs = p_kwargs,
         policy=policy,
-        budget=args.steps, n_eval=args.n_eval, save = args.save, save_path=save_dir,
-        eval_freq = args.eval_freq, progress_bar =args.progress_bar, n_steps = args.n_steps,
-        gamma = args.gamma, algo_file = algo_file,
-        normalize= (args.obs_mode == 'routes')
+        budget=steps, n_eval=10, save = True, save_path=save_dir,
+        eval_freq = 1000, progress_bar =True, n_steps = 256,
+        gamma = .99, algo_file = None,
+        normalize= False#(args.obs_mode == 'routes')
     )
+        
+def runs(steps = 150000, n = 50, K = 50, retain_rate = None):
+    for i in range(5, n):
+    # for i in range(n):
+        run(i, steps, K, retain_rate)
+        print(f'run {i} done !')
+
+if __name__ == '__main__':
+    
+    # runs(n = 10, K=50)
+    # runs(n = 10, K=100)
+    i = 9
+    run(i, K=100)
+    print(f'run {i} done !')
+    
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--algo', default="ppo_mask", choices=['ppo', 'ppo_mask'],
+    #                     help='Selects the RL algorithm')
+    # parser.add_argument('--r_mode', default="normalized_terminal", choices=['heuristic', 'terminal', 'normalized_terminal', 'penalize_length'],
+    #                     help='Selects the reward function')
+    # parser.add_argument('--obs_mode', default="multi", choices=['cost_matrix','routes', 'action', 'elimination_gain', 'assignment', 'multi'],
+    #                     help='Selects the observation of the agent.')
+    # parser.add_argument('--action_mode', default="destinations", choices=['destinations', 'all_nodes'],
+    #                     help='Selects the actions of the agent.')
+    
+    # parser.add_argument('--n_steps', type=int, default=256,
+    #                    help='the number of steps done on an environment before updating the model')
+    
+    # # parser.add_argument('--batch_size', type=int, default=2048,
+    # #                    help='the batch size of ppo')
+    # # parser.add_argument('--minibatch_size', type=int, default=256,
+    # #                    help='the mini batch size of ppo')
+    # parser.add_argument('--n_eval', type=int, default=25,
+    #                    help='the sample size for the policy evaluation')
+    # parser.add_argument('--steps', type=int, default=50_000,
+    #                    help='the maximum steps done by the algorithm')
+    # parser.add_argument('--verbose', type=int, default=0,
+    #                    help='the verbosity')
+    # parser.add_argument('--save', type=bool, default=True,
+    #                    help='save the model')
+    # parser.add_argument('--load', type=bool, default=False,
+    #                    help='load the model')
+    # parser.add_argument('--eval_freq', type=int, default=500,
+    #                    help='the number of steps before an evaluation')
+    # parser.add_argument('--progress_bar', type=bool, default=False,
+    #                    help='the progress bar appearance')
+    
+    # parser.add_argument('--real_data', type=bool, default=True,
+    #                    help='the use of real data if True, synthetic data otherwise')
+    
+    # parser.add_argument('--gamma', type=float, default=0.99,
+    #                    help='the discount factor gamma')
+    
+    # parser.add_argument('--retain_rate', type=float, default=None,
+    #                    help='the discount factor gamma')
+    
+    # parser.add_argument('--Q', type=float, default=30,
+    #                    help='the emission quota')
+    # parser.add_argument('--K', type=int, default=50,
+    #                    help='the number of deliveries')
+    # parser.add_argument('--C', type=int, default=15,
+    #                    help='the capacity of each vehicle')
+    # parser.add_argument('--load_game', type=bool, default=True,
+    #                    help='if the game is saved already')
+    # parser.add_argument('--instance_id', type=int, default=0,
+    #                    help='The id of the saved instance')
+    # parser.add_argument('--change_instance', type=bool, default=False,
+    #                    help='if the model should try to solve other instances')
+    
+    
+    # args = parser.parse_args()
+
+    # # train_PPO(budget=15000, n_eval=1, save = False)
+    # # r_mode = 'penalize_length'
+    # # save_dir = str(path)+f'/ppo_mask/rewardMode({r_mode})_steps({budget})'
+    # # os.mkdir(save_dir)
+    # # train_PPO_mask(env_kwargs = dict(
+    # #     rewards_mode = r_mode, # possible values ['heuristic', 'terminal', 'penalize_length']
+    # # ),
+    # # budget=budget, n_eval=25, save = True, save_path=save_dir
+    # # )
+    # comment = ''
+    # real = "real_" if args.real_data else ""
+    # # if args.change_instance: assert False
+    # if not args.change_instance:
+    #     comment += f'_instanceID{str(args.instance_id)}'
+    # if args.algo == 'ppo':
+    #     train_algo = train_PPO
+    #     save_dir = str(path)+f'/ppo/{real}K{args.K}_rewardMode({args.r_mode})_steps({args.steps})'+comment
+    # else:
+    #     train_algo = train_PPO_mask
+    #     save_dir = str(path)+f'/ppo_mask/{real}K{args.K}_rewardMode({args.r_mode})_obsMode({args.obs_mode})_steps({args.steps})'+comment
+    # os.makedirs(save_dir, exist_ok=True)
+    
+
+    # try:
+    #     if args.load_game:
+    #         if args.retain_rate is None:
+    #             with open(f'RL/{real}game_K{args.K}.pkl', 'rb') as f:
+    #                 g = pickle.load(f)
+    #             routes = np.load(f'RL/{real}routes_K{args.K}.npy')
+    #             dests = np.load(f'RL/{real}destinations_K{args.K}.npy')
+    #         else:
+    #             with open(f'RL/{real}game_K{args.K}_retain{args.retain_rate}.pkl', 'rb') as f:
+    #                 g = pickle.load(f)
+    #             routes = np.load(f'RL/{real}routes_K{args.K}_retain{args.retain_rate}.npy')
+    #             dests = np.load(f'RL/{real}destinations_K{args.K}_retain{args.retain_rate}.npy')
+    #     else:
+    #         assert False
+    # except Exception as e:
+    #     print(e)
+    #     raise('couldnt load')
+    #     g = AssignmentGame(
+    #         grid_size=15,
+    #         max_capacity=args.C,
+    #         Q = args.Q,
+    #         K=args.K
+    #     )
+    #     with open(save_dir+'/game.pkl', 'wb') as f:
+    #             pickle.dump(g, f, -1)
+    #     routes = None,
+    #     dests = None,
+        
+    # if args.load:
+    #     algo_file = str(path)
+    # else:
+    #     algo_file = None
+        
+    # if args.obs_mode == 'cost_matrix':
+    #     policy = 'CnnPolicy'
+    #     p_kwargs = dict(
+    #         # normalize
+    #         features_extractor_class=CustomCNN,
+    #         features_extractor_kwargs=dict(features_dim=128),
+    #     )
+    # elif args.obs_mode == 'multi':
+    #     policy = 'MultiInputPolicy'
+    #     p_kwargs = dict(
+    #         # normalize
+    #         features_extractor_class=Multi,
+    #         # features_extractor_kwargs=dict(features_dim=128),
+    #     )
+    # else:
+    #     policy = MaskableActorCriticPolicy
+    #     p_kwargs = dict(
+    #         activation_fn=nn.ReLU,#LeakyReLU,
+    #         share_features_extractor=True,
+    #         net_arch= [4096, 4096, 2048, 1024, 512] if (
+    #             args.K > 250#args.obs_mode == 'action' and args.action_mode == 'destinations'
+    #             ) else#or args.obs_mode == 'elimination_gain' else
+    #         [4096, 2048, 1024, 1024]#, 128]#dict(
+    #         # [2048, 2048, 1024, 256]#, 128]#dict(
+    #         #    pi=[2048, 2048, 1024, 256],#, 128], 
+    #         #    vf=[2048, 2048, 1024, 256])#, 128])
+    #     )
+    # train_algo(
+    #     env_kwargs = dict(
+    #         game = g,
+    #         rewards_mode = args.r_mode, # possible values ['heuristic', 'terminal', 'normalized_terminal', 'penalize_length']
+    #         action_mode = args.action_mode,
+    #         saved_routes = routes,
+    #         saved_dests = dests,
+    #         obs_mode = args.obs_mode,
+    #         change_instance = args.change_instance,
+    #         instance_id = args.instance_id,
+    #     ),
+    #     policy_kwargs = p_kwargs,
+    #     policy=policy,
+    #     budget=args.steps, n_eval=args.n_eval, save = args.save, save_path=save_dir,
+    #     eval_freq = args.eval_freq, progress_bar =args.progress_bar, n_steps = args.n_steps,
+    #     gamma = args.gamma, algo_file = algo_file,
+    #     normalize= (args.obs_mode == 'routes')
+    # )
     
     # r_mode = 'heuristic'
     # save_dir = str(path)+f'/ppo_mask/rewardMode({r_mode})_steps({budget})'

@@ -667,8 +667,14 @@ class AssignmentEnv(gym.Env):
                 # ])
                 # self.new_routes = []
                 # self.new_dests = []
-                # np.random.shuffle(self.order)
                 assert self.saved_routes.shape[1:] == (self._game.num_vehicles, 2*(self._game.max_capacity+2)-1)
+                order = np.arange(len(self.saved_dests), dtype=int)
+                np.random.shuffle(order)
+                self.saved_dests = self.saved_dests[order]
+                self.saved_routes = self.saved_routes[order]
+                
+                if self.saved_q is not None:
+                    self.saved_q = self.saved_q[order]
                 # name = str(time())
                 # np.save(name + '_routes', np.array(self.new_routes))
                 # np.save(name + '_dests', np.array(self.new_dests))
