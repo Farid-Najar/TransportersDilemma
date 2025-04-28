@@ -45,7 +45,7 @@ The main parameters used in the experiments include:
 The experiments utilize several algorithms implemented in the project:
 - Comparison methods from `compare_game_SA`
 - Learning strategies (LRI, EXP3) from `GameLearning`
-- Simulated Annealing for TSP problems
-- Reinforcement Learning approaches (in the commented section)
+- Simulated Annealing
+- Reinforcement Learning approaches 
 
 To modify experiment parameters or enable the RL experiments, edit the `experiments.py` file directly.
